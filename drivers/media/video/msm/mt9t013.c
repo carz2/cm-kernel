@@ -1198,7 +1198,7 @@ static void mt9t013_poweroff_af(void)
 	gpio_free(mt9t013_ctrl->sensordata->vcm_pwd);
 }
 
-int mt9t013_sensor_open_init(struct msm_camera_sensor_info *data)/*(const struct msm_camera_sensor_info *data)*/
+int mt9t013_sensor_open_init(const struct msm_camera_sensor_info *data)
 {
 	int rc;
 

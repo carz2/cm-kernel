@@ -87,7 +87,7 @@ struct msm_camvfe_fn {
 };
 
 struct msm_sensor_ctrl {
-	int (*s_init)(struct msm_camera_sensor_info *);
+	int (*s_init)(const struct msm_camera_sensor_info *);
 	int (*s_release)(void);
 	int (*s_config)(void __user *);
 };

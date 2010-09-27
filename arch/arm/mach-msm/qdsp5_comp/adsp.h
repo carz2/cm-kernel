@@ -22,7 +22,6 @@
 #include <linux/types.h>
 #include <linux/msm_adsp.h>
 #include <mach/msm_rpcrouter.h>
-#include <mach/msm_rpc_version.h>
 #include <mach/msm_adsp.h>
 
 int adsp_pmem_fixup(struct msm_adsp_module *module, void **addr,

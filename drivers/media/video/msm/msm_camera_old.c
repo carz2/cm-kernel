@@ -905,7 +905,7 @@ static int msm_get_stats(struct msm_sync *sync, void __user *arg)
 		/* control command from v4l2 client */
 		ctrl = (struct msm_ctrl_cmd *)(qcmd->command);
 
-		CDBG("%s: qcmd->type %d\n", __func__, qcmd->type, ctrl->length);
+		CDBG("%s: qcmd->type %d length %d\n", __func__, qcmd->type, ctrl->length);
 
 		if (ctrl->length > 0) {
 			if (copy_to_user((void *)(se.ctrl_cmd.value),
