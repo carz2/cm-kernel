@@ -431,10 +431,24 @@ config MSM_ADSP_REPORT_EVENTS
 	  Normally, only messages from the aDSP are reported to userspace.
 	  With this option, we report events from the aDSP as well.
 
-config MSM_ADSP_COMP
+config MSM_ADSP_COMP_CM
        depends on ARCH_MSM7X00A
-       tristate "MSM ADSP support init info by RPC"
+       tristate "MSM ADSP CM support init info by RPC"
        default y
+       help
+         Provides access to registers needed by the userspace aDSP library.
+
+config MSM_ADSP_COMP_BUZZ
+       depends on ARCH_MSM7X00A
+       tristate "MSM ADSP BUZZ support init info by RPC"
+       default n
+       help
+         Provides access to registers needed by the userspace aDSP library.
+
+config MSM_ADSP_COMP_SENSE
+       depends on ARCH_MSM7X00A
+       tristate "MSM ADSP SENSE support init info by RPC"
+       default n
        help
          Provides access to registers needed by the userspace aDSP library.
 

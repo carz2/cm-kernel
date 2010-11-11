@@ -24,7 +24,10 @@
 #include <mach/msm_adsp.h>
 #include <linux/delay.h>
 #include <linux/wait.h>
+#include <linux/clk.h>
 #include "msm_vfe7x.h"
+#include <mach/camera.h>
+#include <linux/sched.h>
 
 #define QDSP_CMDQUEUE QDSP_vfeCommandQueue
 
@@ -37,10 +40,22 @@
 
 #define MSG_STOP_ACK  1
 #define MSG_SNAPSHOT  2
+#define MSG_START_ACK 4
 #define MSG_OUTPUT1   6
 #define MSG_OUTPUT2   7
 #define MSG_STATS_AF  8
 #define MSG_STATS_WE  9
+
+
+/*
+#if (CONFIG_MSM_AMSS_VERSION >= 4320) && (CONFIG_MSM_AMSS_VERSION < 5000)
+#define VFE_ADSP_EVENT 0xFFFFFFFF
+#else
+#define VFE_ADSP_EVENT 0xFFFF
+#endif
+*/
+#define VFE_ADSP_EVENT 0xFFFFFFFF
+
 
 static struct msm_adsp_module *qcam_mod;
 static struct msm_adsp_module *vfe_mod;
@@ -54,7 +69,9 @@ static uint8_t vfestopped;
 static struct stop_event stopevent;
 
 static struct clk *ebi1_clk;
-static const char *const ebi1_clk_name = "ebi1_clk";
+static const char *const clk_name = "ebi1_clk";
+
+static uint8_t vfe_operationmode; /*1 for yuv snapshot, 0 for other*/
 
 static void vfe_7x_convert(struct msm_vfe_phy_info *pinfo,
 			   enum vfe_resp_msg type,
@@ -106,7 +123,7 @@ static void vfe_7x_ops(void *driver_data, unsigned id, size_t len,
 	struct msm_vfe_resp *rp;
 	void *data;
 
-	len = (id == (uint16_t)-1) ? 0 : len;
+	len = (id == VFE_ADSP_EVENT) ? 0 : len;
 	data = resp->vfe_alloc(sizeof(struct msm_vfe_resp) + len,
 			vfe_syncdata,
 			GFP_ATOMIC);
@@ -117,8 +134,9 @@ static void vfe_7x_ops(void *driver_data, unsigned id, size_t len,
 	}
 	rp = (struct msm_vfe_resp *)data;
 	rp->evt_msg.len = len;
+	rp->evt_msg.exttype = 0;
 
-	if (id == ((uint16_t)-1)) {
+	if (id == VFE_ADSP_EVENT) {
 		/* event */
 		rp->type = VFE_EVENT;
 		rp->evt_msg.type = MSM_CAMERA_EVT;
@@ -134,7 +152,13 @@ static void vfe_7x_ops(void *driver_data, unsigned id, size_t len,
 		rp->evt_msg.data = rp + 1;
 		getevent(rp->evt_msg.data, len);
 
+		CDBG("%s, vfe_operationmode %d rp->evt_msg.msg_id %d\n",
+			__func__, vfe_operationmode, rp->evt_msg.msg_id);
 		switch (rp->evt_msg.msg_id) {
+		case MSG_START_ACK:
+			if (vfe_operationmode == 1)
+				rp->evt_msg.exttype = VFE_MSG_SNAPSHOT;
+			break;
 		case MSG_SNAPSHOT:
 			rp->type = VFE_MSG_SNAPSHOT;
 			break;
@@ -230,12 +254,21 @@ static int vfe_7x_stop(void)
 
 static void vfe_7x_release(struct platform_device *pdev)
 {
+	struct msm_sensor_ctrl *sctrl =
+		&((struct msm_sync *)vfe_syncdata)->sctrl;
+
+	if (ebi1_clk) {
+		clk_set_rate(ebi1_clk, 0);
+		clk_put(ebi1_clk);
+		ebi1_clk = 0;
+	}
+
 	mutex_lock(&vfe_lock);
 	vfe_syncdata = NULL;
 	mutex_unlock(&vfe_lock);
-
+	pr_info("%s:release ADSP task\n", __func__);
 	if (!vfestopped) {
-		CDBG("%s:%d:Calling vfe_7x_stop()\n", __func__, __LINE__);
+		pr_info("%s:%d:Calling vfe_7x_stop()\n", __func__, __LINE__);
 		vfe_7x_stop();
 	} else
 		vfestopped = 0;
@@ -243,16 +276,22 @@ static void vfe_7x_release(struct platform_device *pdev)
 	msm_adsp_disable(qcam_mod);
 	msm_adsp_disable(vfe_mod);
 
+#if defined(CONFIG_ARCH_MSM7X00A)
+	if (sctrl)
+		sctrl->s_release();
+
+	/* for HERO power sequence of standby mode */
+	msm_adsp_put(qcam_mod);
+	msm_adsp_put(vfe_mod);
+#else
 	msm_adsp_put(qcam_mod);
 	msm_adsp_put(vfe_mod);
 
-	msm_camio_disable(pdev);
+	if (sctrl)
+		sctrl->s_release();
+#endif
 
-	if (ebi1_clk) {
-		clk_set_rate(ebi1_clk, 0);
-		clk_put(ebi1_clk);
-		ebi1_clk = 0;
-	}
+	msm_camio_disable(pdev);
 
 	kfree(extdata);
 	extdata = 0;
@@ -263,6 +302,19 @@ static int vfe_7x_init(struct msm_vfe_callback *presp,
 {
 	int rc = 0;
 
+	ebi1_clk = clk_get(NULL, clk_name);
+	if (!ebi1_clk) {
+		pr_err("%s: could not get %s\n", __func__, clk_name);
+		return -EIO;
+	}
+
+	rc = clk_set_rate(ebi1_clk, 128000000);
+	if (rc < 0) {
+		pr_err("%s: clk_set_rate(%s) failed: %d\n", __func__,
+			clk_name, rc);
+		return rc;
+	}
+
 	init_waitqueue_head(&stopevent.wait);
 	stopevent.timeout = 200;
 	stopevent.state = 0;
@@ -270,20 +322,7 @@ static int vfe_7x_init(struct msm_vfe_callback *presp,
 	if (presp && presp->vfe_resp)
 		resp = presp;
 	else
-		return -EIO;
-
-	ebi1_clk = clk_get(NULL, ebi1_clk_name);
-	if (!ebi1_clk) {
-		pr_err("%s: could not get %s\n", __func__, ebi1_clk_name);
-		return -EIO;
-	}
-
-	rc = clk_set_rate(ebi1_clk, 128000000);
-	if (rc < 0) {
-		pr_err("%s: clk_set_rate(%s) failed: %d\n", __func__,
-			ebi1_clk_name, rc);
-		return rc;
-	}
+		return -EFAULT;
 
 	/* Bring up all the required GPIOs and Clocks */
 	rc = msm_camio_enable(dev);
@@ -399,7 +438,7 @@ static int vfe_7x_config(struct msm_vfe_cfg_cmd *cmd, void *data)
 	void *cmd_data = NULL;
 	void *cmd_data_alloc = NULL;
 	long rc = 0;
-	struct msm_vfe_command_7k *vfecmd;
+	struct msm_vfe_command_7k *vfecmd = NULL;
 
 	vfecmd = kmalloc(sizeof(struct msm_vfe_command_7k), GFP_ATOMIC);
 	if (!vfecmd) {
@@ -625,7 +664,6 @@ static int vfe_7x_config(struct msm_vfe_cfg_cmd *cmd, void *data)
 				switch (*(uint32_t *) cmd_data) {
 				case VFE_RESET_CMD:
 					msm_camio_vfe_blk_reset();
-					msm_camio_camif_pad_reg_reset_2();
 					vfestopped = 0;
 					break;
 
@@ -664,6 +702,7 @@ static int vfe_7x_config(struct msm_vfe_cfg_cmd *cmd, void *data)
 				goto config_done;
 			}
 
+			vfe_operationmode = 0;
 			vfe_7x_config_axi(OUTPUT_1, axid, axio);
 
 			cmd_data = axio;
@@ -690,6 +729,7 @@ static int vfe_7x_config(struct msm_vfe_cfg_cmd *cmd, void *data)
 				goto config_done;
 			}
 
+			vfe_operationmode = 0;
 			vfe_7x_config_axi(OUTPUT_2, axid, axio);
 			cmd_data = axio;
 		}
@@ -714,8 +754,8 @@ static int vfe_7x_config(struct msm_vfe_cfg_cmd *cmd, void *data)
 				goto config_done;
 			}
 
+			vfe_operationmode = 1;
 			vfe_7x_config_axi(OUTPUT_1_AND_2, axid, axio);
-
 			cmd_data = axio;
 		}
 		break;
@@ -728,15 +768,18 @@ static int vfe_7x_config(struct msm_vfe_cfg_cmd *cmd, void *data)
 		goto config_done;
 
 config_send:
+	/* HTC: check cmd_data */
+	if (cmd_data) {
 	CDBG("send adsp command = %d\n", *(uint32_t *) cmd_data);
 	rc = msm_adsp_write(vfe_mod, vfecmd->queue, cmd_data, vfecmd->length);
-
+	}
 config_done:
 	if (cmd_data_alloc != NULL)
 		kfree(cmd_data_alloc);
 
 config_failure:
 	kfree(scfg);
+	kfree(sfcfg);
 	kfree(axio);
 	kfree(vfecmd);
 	return rc;
