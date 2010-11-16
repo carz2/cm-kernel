@@ -23,7 +23,7 @@ struct reg_struct mt9t013_reg_pat[2] = {
 	{/* Preview 2x2 binning 20fps, pclk MHz, MCLK 24MHz */
 	 /* vt_pix_clk_div:REG=0x0300 update get_snapshot_fps
 	  * if this change */
-	 10,
+	10,
 
 	 /* vt_sys_clk_div: REG=0x0302  update get_snapshot_fps
 	  * if this change */
@@ -31,15 +31,15 @@ struct reg_struct mt9t013_reg_pat[2] = {
 
 	 /* pre_pll_clk_div REG=0x0304  update get_snapshot_fps
 	  * if this change */
-	 3,
+	3,
 
 	 /* pll_multiplier  REG=0x0306 60 for 30fps preview, 40
 	  * for 20fps preview
 	  * 46 for 30fps preview, try 47/48 to increase further */
-	 80,
+	80,
 
 	 /* op_pix_clk_div        REG=0x0308 */
-	 10,
+	10,
 
 	 /* op_sys_clk_div        REG=0x030A */
 	 1,
@@ -81,12 +81,12 @@ struct reg_struct mt9t013_reg_pat[2] = {
 	 16,
 
 	 /* fine_int_time   REG=0x3014 */
-	 1461},
-
+	1461
+	},
 	{ /*Snapshot */
 	 /* vt_pix_clk_div  REG=0x0300 update get_snapshot_fps
 	  * if this change */
-	 10,
+	10,
 
 	 /* vt_sys_clk_div  REG=0x0302 update get_snapshot_fps
 	  * if this change */
@@ -94,15 +94,15 @@ struct reg_struct mt9t013_reg_pat[2] = {
 
 	 /* pre_pll_clk_div REG=0x0304 update get_snapshot_fps
 	  * if this change */
-	 3,
+	3,
 
 	 /* pll_multiplier REG=0x0306 50 for 15fps snapshot,
 	  * 40 for 10fps snapshot
 	  * 46 for 30fps snapshot, try 47/48 to increase further */
-	 80,
+	80,
 
 	 /* op_pix_clk_div        REG=0x0308 */
-	 10,
+	10,
 
 	 /* op_sys_clk_div        REG=0x030A */
 	 1,
@@ -135,7 +135,7 @@ struct reg_struct mt9t013_reg_pat[2] = {
 	 1544,
 
 	 /* line_length_pck REG=0x300C */
-	 4800,
+	4800,
 
 	 /* frame_length_lines    REG=0x300A */
 	 1629,
@@ -144,10 +144,11 @@ struct reg_struct mt9t013_reg_pat[2] = {
 	 16,
 
 	 /* fine_int_time REG=0x3014   */
-	 733}
+	733
+	}
 };
 
-struct mt9t013_i2c_reg_conf const mt9t013_test_tbl[] = {
+struct mt9t013_i2c_reg_conf mt9t013_test_tbl[] = {
 	{0x3044, 0x0544 & 0xFBFF},
 	{0x30CA, 0x0004 | 0x0001},
 	{0x30D4, 0x9020 & 0x7FFF},
@@ -159,7 +160,7 @@ struct mt9t013_i2c_reg_conf const mt9t013_test_tbl[] = {
 };
 
 /* [Lens shading 85 Percent TL84] */
-struct mt9t013_i2c_reg_conf const mt9t013_lc_tbl[] = {
+struct mt9t013_i2c_reg_conf mt9t013_lc_tbl[] = {
 	{0x360A, 0x0130},	/* P_RD_P0Q0 */
 	{0x360C, 0xADED},	/* P_RD_P0Q1 */
 	{0x360E, 0x50D1},	/* P_RD_P0Q2 */

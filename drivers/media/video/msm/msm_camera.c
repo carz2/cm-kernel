@@ -505,7 +505,7 @@ static int __msm_get_frame(struct msm_sync *sync,
 	frame->y_off = region->info.y_off;
 	frame->cbcr_off = region->info.cbcr_off;
 	frame->fd = region->info.fd;
-	frame->path = vdata->phy.output_id;
+/*	frame->path = vdata->phy.output_id;*/
 	CDBG("%s: y %x, cbcr %x, qcmd %x, virt_addr %x\n",
 		__func__,
 		pphy->y_phy, pphy->cbcr_phy, (int) qcmd, (int) frame->buffer);

@@ -40,5 +40,6 @@ extern struct platform_device msm_device_mddi1;
 extern struct platform_device msm_device_mdp;
 extern struct platform_device msm_device_touchscreen;
 extern struct platform_device msm_device_spi;
+extern unsigned engineer_id;
 
 #endif

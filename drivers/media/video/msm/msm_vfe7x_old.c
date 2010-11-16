@@ -45,10 +45,6 @@
 #define MSG_STATS_AF  8
 #define MSG_STATS_WE  9
 
-
-#define VFE_ADSP_EVENT 0xFFFFFFFF
-
-
 static struct msm_adsp_module *qcam_mod;
 static struct msm_adsp_module *vfe_mod;
 static struct msm_vfe_callback *resp;
@@ -115,7 +111,7 @@ static void vfe_7x_ops(void *driver_data, unsigned id, size_t len,
 	struct msm_vfe_resp *rp;
 	void *data;
 
-	len = (id == VFE_ADSP_EVENT) ? 0 : len;
+	len = (id == (uint16_t)-1) ? 0 : len;
 	data = resp->vfe_alloc(sizeof(struct msm_vfe_resp) + len,
 			vfe_syncdata,
 			GFP_ATOMIC);
@@ -128,7 +124,7 @@ static void vfe_7x_ops(void *driver_data, unsigned id, size_t len,
 	rp->evt_msg.len = len;
 	rp->evt_msg.exttype = 0;
 
-	if (id == VFE_ADSP_EVENT) {
+	if (id == ((uint16_t)-1)) {
 		/* event */
 		rp->type = VFE_EVENT;
 		rp->evt_msg.type = MSM_CAMERA_EVT;

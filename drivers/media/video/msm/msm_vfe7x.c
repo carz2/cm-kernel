@@ -659,6 +659,7 @@ static int vfe_7x_config(struct msm_vfe_cfg_cmd *cmd, void *data)
 				rc = -EFAULT;
 				goto config_done;
 			}
+			//vfecmd->value = tmp;
 
 			if (vfecmd->queue == QDSP_CMDQUEUE) {
 				switch (*(uint32_t *) cmd_data) {

@@ -1254,18 +1254,8 @@ int __init sapphire_init_panel(void)
 		msm_proc_comm(PCOM_RPC_GPIO_TLMM_CONFIG_EX, &config, 0);
 
 	/* setup FB by SMI size */
-	if (sapphire_get_smi_size() == 32) {
-		switch (sapphire_get_die_size()) {
-		case EBI1_DUAL_128MB_128MB:
-		case EBI1_MONO_256MB:
-			resources_msm_fb[0].start = 0x00700000;
-			resources_msm_fb[0].end = resources_msm_fb[0].start + 0x9b000 - 1;
-			break;
-		default:
-			mddi_pdata.fb_resource = resources_msm_fb_smi32;
-			break;
-		}
-	}
+	if (sapphire_get_smi_size() == 32)
+		mddi_pdata.fb_resource = resources_msm_fb_smi32;
 
 	rc = gpio_request(VSYNC_GPIO, "vsync");
 	if (rc)
