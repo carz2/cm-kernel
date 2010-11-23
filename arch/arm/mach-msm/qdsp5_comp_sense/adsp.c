@@ -121,13 +121,11 @@ static int32_t adsp_validate_queue(uint32_t mod_id, unsigned q_idx,
 
 uint32_t adsp_get_module(struct adsp_info *info, uint32_t task)
 {
-	BUG_ON(current_image == -1UL);
 	return info->task_to_module[current_image][task];
 }
 
 uint32_t adsp_get_queue_offset(struct adsp_info *info, uint32_t queue_id)
 {
-	BUG_ON(current_image == -1UL);
 	return info->queue_offset[current_image][queue_id];
 }
 
@@ -332,7 +330,6 @@ done:
 	mutex_unlock(&module->lock);
 	return rc;
 }
-EXPORT_SYMBOL(msm_adsp_get);
 
 static int msm_adsp_disable_locked(struct msm_adsp_module *module);
 
@@ -371,7 +368,6 @@ void msm_adsp_put(struct msm_adsp_module *module)
 	}
 	mutex_unlock(&module->lock);
 }
-EXPORT_SYMBOL(msm_adsp_put);
 
 /* this should be common code with rpc_servers.c */
 static int rpc_send_accepted_void_reply(struct msm_rpc_endpoint *client,
@@ -442,13 +438,13 @@ int __msm_adsp_write(struct msm_adsp_module *module, unsigned dsp_queue_addr,
 	while (((ctrl_word = readl(info->write_ctrl)) &
 		ADSP_RTOS_WRITE_CTRL_WORD_READY_M) !=
 		ADSP_RTOS_WRITE_CTRL_WORD_READY_V) {
-		if (cnt > 100) {
+		if (cnt > 10) {
 			pr_err("adsp: timeout waiting for DSP write ready\n");
 			ret_status = -EIO;
 			goto fail;
 		}
 		pr_warning("adsp: waiting for DSP write ready\n");
-		udelay(1);
+		udelay(10);
 		cnt++;
 	}
 
@@ -479,12 +475,12 @@ int __msm_adsp_write(struct msm_adsp_module *module, unsigned dsp_queue_addr,
 	while ((readl(info->write_ctrl) &
 		ADSP_RTOS_WRITE_CTRL_WORD_MUTEX_M) ==
 		ADSP_RTOS_WRITE_CTRL_WORD_MUTEX_NAVAIL_V) {
-		if (cnt > 5000) {
+		if (cnt > 5) {
 			pr_err("adsp: timeout waiting for adsp ack\n");
 			ret_status = -EIO;
 			goto fail;
 		}
-		udelay(1);
+		mdelay(1);
 		cnt++;
 	}
 
@@ -604,6 +600,8 @@ static void handle_adsp_rtos_mtoa_app(struct rpc_request_hdr *req)
 	struct adsp_rtos_mp_mtoa_type	*pkt_ptr;
 	struct queue_to_offset_type	*qptr;
 	struct queue_to_offset_type	*qtbl;
+	struct mod_to_queue_offsets	*mqptr;
+	struct mod_to_queue_offsets	*mqtbl;
 	uint32_t	*mptr;
 	uint32_t	*mtbl;
 	uint32_t	q_idx;
@@ -742,8 +740,8 @@ static void handle_adsp_rtos_mtoa_app(struct rpc_request_hdr *req)
 	rpc_send_accepted_void_reply(rpc_cb_server_client, req->xid,
 				     RPC_ACCEPTSTAT_SUCCESS);
 
-	/*if (module->ops->modem_event != NULL)
-		module->ops->modem_event(module->driver_data, image);*/
+	if (module->ops->modem_event != NULL)
+		module->ops->modem_event(module->driver_data, image);
 done:
 	mutex_unlock(&module->lock);
 	event_addr = (uint32_t *)req;
@@ -782,7 +780,7 @@ static int adsp_rpc_thread(void *data)
 {
 	void *buffer;
 	struct rpc_request_hdr *req;
-	int rc;
+	int rc, exit = 0;
 
 	do {
 		rc = msm_rpc_read(rpc_cb_server_client, &buffer, -1, -1);
@@ -815,8 +813,7 @@ static int adsp_rpc_thread(void *data)
 bad_rpc:
 		pr_err("adsp: bogus rpc from modem\n");
 		kfree(buffer);
-	} while (1);
-
+	} while (!exit);
 	do_exit(0);
 }
 
@@ -1039,7 +1036,6 @@ int msm_adsp_enable(struct msm_adsp_module *module)
 	mutex_unlock(&module->lock);
 	return rc;
 }
-EXPORT_SYMBOL(msm_adsp_enable);
 
 static int msm_adsp_disable_locked(struct msm_adsp_module *module)
 {
@@ -1068,7 +1064,6 @@ int msm_adsp_disable(struct msm_adsp_module *module)
 	mutex_unlock(&module->lock);
 	return rc;
 }
-EXPORT_SYMBOL(msm_adsp_disable);
 
 int msm_adsp_disable_event_rsp(struct msm_adsp_module *module)
 {
@@ -1083,7 +1078,6 @@ static int msm_adsp_probe(struct platform_device *pdev)
 {
 	unsigned count;
 	int rc, i;
-	int max_module_id;
 
 	wake_lock_init(&adsp_suspend_lock, WAKE_LOCK_SUSPEND, "adsp");
 	adsp_info.init_info_ptr = kzalloc(
@@ -1094,20 +1088,14 @@ static int msm_adsp_probe(struct platform_device *pdev)
 	rc = adsp_init_info(&adsp_info);
 	if (rc)
 		return rc;
-	adsp_info.send_irq += (uint32_t) MSM_AD5_BASE;
-	adsp_info.read_ctrl += (uint32_t) MSM_AD5_BASE;
-	adsp_info.write_ctrl += (uint32_t) MSM_AD5_BASE;
+	adsp_info.send_irq += MSM_AD5_BASE;
+	adsp_info.read_ctrl += MSM_AD5_BASE;
+	adsp_info.write_ctrl += MSM_AD5_BASE;
 	count = adsp_info.module_count;
 
-#if CONFIG_MSM_AMSS_VERSION >= 6350
-	max_module_id = count;
-#else
-	max_module_id = adsp_info.max_module_id + 1;
-#endif
-
 	adsp_modules = kzalloc(
-		sizeof(struct msm_adsp_module) * count +
-		sizeof(void *) * max_module_id, GFP_KERNEL);
+		(sizeof(struct msm_adsp_module) + sizeof(void *)) *
+		count, GFP_KERNEL);
 	if (!adsp_modules)
 		return -ENOMEM;
 
