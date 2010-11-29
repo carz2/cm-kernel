@@ -41,15 +41,8 @@ enum vfe_resp_msg {
 	VFE_EVENT,
 	VFE_MSG_GENERAL,
 	VFE_MSG_SNAPSHOT,
-#ifndef CONFIG_720P_CAMERA
 	VFE_MSG_OUTPUT1,
 	VFE_MSG_OUTPUT2,
-#else
-	VFE_MSG_OUTPUT_P,   /* preview (continuous mode ) */
-	VFE_MSG_OUTPUT_T,   /* thumbnail (snapshot mode )*/
-	VFE_MSG_OUTPUT_S,   /* main image (snapshot mode )*/
-	VFE_MSG_OUTPUT_V,   /* video   (continuous mode ) */
-#endif
 	VFE_MSG_STATS_AF,
 	VFE_MSG_STATS_WE,
 };
@@ -207,9 +200,7 @@ struct msm_pmem_region {
 struct axidata {
 	uint32_t bufnum1;
 	uint32_t bufnum2;
-#ifdef CONFIG_720P_CAMERA
-	uint32_t bufnum3;
-#endif
+
 	struct msm_pmem_region *region;
 };
 

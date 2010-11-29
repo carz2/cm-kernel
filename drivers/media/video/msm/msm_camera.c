@@ -398,13 +398,9 @@ static int __msm_pmem_table_del(struct msm_sync *sync,
 	struct hlist_node *node, *n;
 
 	switch (pinfo->type) {
-#ifndef CONFIG_720P_CAMERA
+
 	case MSM_PMEM_OUTPUT1:
 	case MSM_PMEM_OUTPUT2:
-#else
-	case MSM_PMEM_VIDEO:
-	case MSM_PMEM_PREVIEW:
-#endif
 	case MSM_PMEM_THUMBNAIL:
 	case MSM_PMEM_MAINIMG:
 	case MSM_PMEM_RAW_MAINIMG:
@@ -962,7 +958,6 @@ static int msm_get_stats(struct msm_sync *sync, void __user *arg)
 				goto failure;
 			}
 		} else {
-#ifndef CONFIG_720P_CAMERA
 			if ((sync->pp_mask & PP_PREV) &&
 					(data->type == VFE_MSG_OUTPUT1 ||
 					data->type == VFE_MSG_OUTPUT2))
@@ -971,17 +966,6 @@ static int msm_get_stats(struct msm_sync *sync, void __user *arg)
 				  data->type == VFE_MSG_SNAPSHOT)
 					rc = msm_divert_snapshot(sync,
 								data, &se);
-#else
-			if ((sync->pp_mask & PP_PREV) &&
-				(data->type == VFE_MSG_OUTPUT_P))
-					rc = msm_divert_frame(sync, data, &se);
-			else if ((sync->pp_mask & (PP_SNAP|PP_RAW_SNAP)) &&
-				  (data->type == VFE_MSG_SNAPSHOT ||
-				   data->type == VFE_MSG_OUTPUT_T ||
-				   data->type == VFE_MSG_OUTPUT_S))
-					rc = msm_divert_snapshot(sync,
-								data, &se);
-#endif
 		}
 		break;
 
@@ -1186,7 +1170,6 @@ static int msm_frame_axi_cfg(struct msm_sync *sync,
 
 	switch (cfgcmd->cmd_type) {
 
-#ifndef CONFIG_720P_CAMERA
 	case CMD_AXI_CFG_OUT1:
 		pmem_type = MSM_PMEM_OUTPUT1;
 		axi_data.bufnum1 =
@@ -1236,67 +1219,7 @@ static int msm_frame_axi_cfg(struct msm_sync *sync,
 			return -EINVAL;
 		}
 		break;
-#else
-	case CMD_AXI_CFG_PREVIEW:
-		pmem_type = MSM_PMEM_PREVIEW;
-		axi_data.bufnum2 =
-			msm_pmem_region_lookup(&sync->pmem_frames, pmem_type,
-				&region[0], 8);
-		if (!axi_data.bufnum2) {
-			pr_err("%s %d: pmem region lookup error (empty %d)\n",
-				__func__, __LINE__,
-				hlist_empty(&sync->pmem_frames));
-			return -EINVAL;
-		}
-		break;
 
-	case CMD_AXI_CFG_VIDEO:
-		pmem_type = MSM_PMEM_PREVIEW;
-		axi_data.bufnum1 =
-			msm_pmem_region_lookup(&sync->pmem_frames, pmem_type,
-				&region[0], 8);
-		if (!axi_data.bufnum1) {
-			pr_err("%s %d: pmem region lookup error\n",
-				__func__, __LINE__);
-			return -EINVAL;
-		}
-
-		pmem_type = MSM_PMEM_VIDEO;
-		axi_data.bufnum2 =
-			msm_pmem_region_lookup(&sync->pmem_frames, pmem_type,
-				&region[axi_data.bufnum1],
-				(8-(axi_data.bufnum1)));
-		if (!axi_data.bufnum2) {
-			pr_err("%s %d: pmem region lookup error\n",
-				__func__, __LINE__);
-			return -EINVAL;
-		}
-		break;
-
-
-	case CMD_AXI_CFG_SNAP:
-		pmem_type = MSM_PMEM_THUMBNAIL;
-		axi_data.bufnum1 =
-			msm_pmem_region_lookup(&sync->pmem_frames, pmem_type,
-				&region[0], 8);
-		if (!axi_data.bufnum1) {
-			pr_err("%s %d: pmem region lookup error\n",
-				__func__, __LINE__);
-			return -EINVAL;
-		}
-
-		pmem_type = MSM_PMEM_MAINIMG;
-		axi_data.bufnum2 =
-			msm_pmem_region_lookup(&sync->pmem_frames, pmem_type,
-				&region[axi_data.bufnum1],
-				(8-(axi_data.bufnum1)));
-		if (!axi_data.bufnum2) {
-			pr_err("%s %d: pmem region lookup error\n",
-				__func__, __LINE__);
-			return -EINVAL;
-		}
-		break;
-#endif
 	case CMD_RAW_PICT_AXI_CFG:
 		pmem_type = MSM_PMEM_RAW_MAINIMG;
 		axi_data.bufnum2 =
@@ -1411,13 +1334,9 @@ static int __msm_register_pmem(struct msm_sync *sync,
 	int rc = 0;
 
 	switch (pinfo->type) {
-#ifndef CONFIG_720P_CAMERA
+
 	case MSM_PMEM_OUTPUT1:
 	case MSM_PMEM_OUTPUT2:
-#else
-	case MSM_PMEM_VIDEO:
-	case MSM_PMEM_PREVIEW:
-#endif
 	case MSM_PMEM_THUMBNAIL:
 	case MSM_PMEM_MAINIMG:
 	case MSM_PMEM_RAW_MAINIMG:
@@ -1554,15 +1473,10 @@ static int msm_axi_config(struct msm_sync *sync, void __user *arg)
 	}
 
 	switch (cfgcmd.cmd_type) {
-#ifndef CONFIG_720P_CAMERA
+
 	case CMD_AXI_CFG_OUT1:
 	case CMD_AXI_CFG_OUT2:
 	case CMD_AXI_CFG_SNAP_O1_AND_O2:
-#else
-	case CMD_AXI_CFG_VIDEO:
-	case CMD_AXI_CFG_PREVIEW:
-	case CMD_AXI_CFG_SNAP:
-#endif
 	case CMD_RAW_PICT_AXI_CFG:
 		return msm_frame_axi_cfg(sync, &cfgcmd);
 
@@ -2264,13 +2178,9 @@ static void msm_vfe_sync(struct msm_vfe_resp *vdata,
 	
 	CDBG("%s: vdata->type %d\n", __func__, vdata->type);
 	switch (vdata->type) {
-#ifndef CONFIG_720P_CAMERA
+
 	case VFE_MSG_OUTPUT1:
 	case VFE_MSG_OUTPUT2:
-#else
-	case VFE_MSG_OUTPUT_P:
-#endif
-
 		if (sync->pp_mask & PP_PREV) {
 			CDBG("%s: PP_PREV in progress: phy_y %x phy_cbcr %x\n",
 				__func__,
@@ -2290,15 +2200,6 @@ static void msm_vfe_sync(struct msm_vfe_resp *vdata,
 			qcmd->on_heap++;
 		msm_enqueue(&sync->frame_q, &qcmd->list_frame);
 		break;
-
-#ifdef CONFIG_720P_CAMERA
-		case VFE_MSG_OUTPUT_V:
-			if (qcmd->on_heap)
-				qcmd->on_heap++;
-		CDBG("%s: msm_enqueue video frame_q\n", __func__);
-		msm_enqueue(&sync->frame_q, &qcmd->list_frame);
-		break;
-#endif
 
 	case VFE_MSG_SNAPSHOT:
 		if (sync->pp_mask & (PP_SNAP | PP_RAW_SNAP)) {
