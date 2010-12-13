@@ -100,7 +100,7 @@ int adsp_init_info(struct adsp_info *info)
 	info->write_ctrl = 0x00400034;
 
 	info->max_msg16_size = 193;
-	info->max_msg32_size = 9;
+	info->max_msg32_size = 8;
 	for (img_num = 0; img_num < IMG_MAX; img_num++)
 		qdsp_queue_offset_table[img_num] =
 		&info->init_info_ptr->queue_offsets[img_num][0];

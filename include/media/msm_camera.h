@@ -91,12 +91,6 @@
 #define MSM_CAM_IOCTL_ENABLE_OUTPUT_IND \
 	_IOW(MSM_CAM_IOCTL_MAGIC, 25, uint32_t *)
 
-#define MSM_CAM_IOCTL_AF_CTRL \
-	_IOR(MSM_CAM_IOCTL_MAGIC, 26, struct msm_ctrl_cmt_t *)
-
-#define MSM_CAM_IOCTL_AF_CTRL_DONE \
-	_IOW(MSM_CAM_IOCTL_MAGIC, 27, struct msm_ctrl_cmt_t *)
-
 #define MAX_SENSOR_NUM  3
 #define MAX_SENSOR_NAME 32
 
@@ -166,7 +160,7 @@ struct msm_camera_cfg_cmd {
 	uint16_t length;
 	void *value;
 };
-/*
+
 #ifdef CONFIG_720P_CAMERA
 #define CMD_GENERAL 0
 #define CMD_AXI_CFG_SNAP    	    1
@@ -205,7 +199,14 @@ struct msm_camera_cfg_cmd {
 
 #define UPDATE_STATS_INVALID        31
 #else
-*/
+
+//Just for build pass (Horng test)
+//------------------------------------
+#define CMD_AXI_CFG_SNAP    	    1
+#define CMD_AXI_CFG_PREVIEW		    2
+#define CMD_AXI_CFG_VIDEO		    3
+//------------------------------------
+
 #define CMD_GENERAL			0
 #define CMD_AXI_CFG_OUT1		1
 #define CMD_AXI_CFG_SNAP_O1_AND_O2	2
@@ -227,32 +228,7 @@ struct msm_camera_cfg_cmd {
 #define CMD_STATS_ENABLE        18
 #define UPDATE_STATS_INVALID		19
 
-#define CMD_STATS_AEC_ENABLE		20
-#define CMD_STATS_AWB_ENABLE		21
-#define CMD_STATS_AEC_AXI_CFG		22
-#define CMD_STATS_AWB_AXI_CFG		23
-#define CMD_STATS_RS_AXI_CFG		24
-#define CMD_STATS_CS_AXI_CFG		25
-#define CMD_STATS_IHIST_AXI_CFG		26
-#define CMD_STATS_SKIN_AXI_CFG		27
-#define CMD_STATS_AEC_BUF_RELEASE	28
-#define CMD_STATS_AWB_BUF_RELEASE	29
-#define CMD_STATS_RS_BUF_RELEASE	30
-#define CMD_STATS_CS_BUF_RELEASE	31
-#define CMD_STATS_IHIST_BUF_RELEASE	32
-#define CMD_STATS_SKIN_BUF_RELEASE	33
-
-#define CMD_AXI_CFG_SNAP_GEMINI		34
-#define CMD_AXI_CFG_SNAP		35
-#define CMD_AXI_CFG_PREVIEW		36
-#define CMD_AXI_CFG_VIDEO		37
-
-#define CMD_STATS_IHIST_ENABLE 38
-#define CMD_STATS_RS_ENABLE 39
-#define CMD_STATS_CS_ENABLE 40
-#define CMD_AXI_CFG_O1_AND_O2	41 /* output1 and output2 */
-
-/*#endif*/
+#endif
 
 /* vfe config command: config command(from config thread)*/
 struct msm_vfe_cfg_cmd {
@@ -265,7 +241,7 @@ struct msm_vfe_cfg_cmd {
 struct camera_enable_cmd {
 	char name[MAX_CAMERA_ENABLE_NAME_LEN];
 };
-/*
+
 #ifdef CONFIG_720P_CAMERA
 
 #define MSM_PMEM_VIDEO        0
@@ -284,7 +260,13 @@ struct camera_enable_cmd {
 #define MSM_PMEM_MAX          13
 
 #else
-*/
+
+//Just for build pass (Horng test)
+//------------------------------------
+#define MSM_PMEM_VIDEO        0
+#define MSM_PMEM_PREVIEW      1
+//------------------------------------
+
 #define MSM_PMEM_OUTPUT1		0
 #define MSM_PMEM_OUTPUT2		1
 #define MSM_PMEM_OUTPUT1_OUTPUT2	2
@@ -293,17 +275,9 @@ struct camera_enable_cmd {
 #define MSM_PMEM_RAW_MAINIMG		5
 #define MSM_PMEM_AEC_AWB		6
 #define MSM_PMEM_AF			7
-#define MSM_PMEM_AEC			8
-#define MSM_PMEM_AWB			9
-#define MSM_PMEM_RS		    	10
-#define MSM_PMEM_CS	    		11
-#define MSM_PMEM_IHIST			12
-#define MSM_PMEM_SKIN			13
-#define MSM_PMEM_VIDEO			14
-#define MSM_PMEM_PREVIEW		15
-#define MSM_PMEM_MAX			16
+#define MSM_PMEM_MAX			8
 
-/*#endif*/
+#endif
 
 #define FRAME_PREVIEW_OUTPUT1		0
 #define FRAME_PREVIEW_OUTPUT2		1
@@ -331,7 +305,7 @@ struct outputCfg {
 	uint32_t window_height_lastline;
 };
 
-//#ifndef CONFIG_720P_CAMERA
+#ifndef CONFIG_720P_CAMERA
 
 #define OUTPUT_1	0
 #define OUTPUT_2	1
@@ -339,15 +313,13 @@ struct outputCfg {
 #define CAMIF_TO_AXI_VIA_OUTPUT_2		3
 #define OUTPUT_1_AND_CAMIF_TO_AXI_VIA_OUTPUT_2	4
 #define OUTPUT_2_AND_CAMIF_TO_AXI_VIA_OUTPUT_1	5
-#define OUTPUT_1_AND_3 6
-#define LAST_AXI_OUTPUT_MODE_ENUM = OUTPUT_1_AND_3            7   /* video */
-
+#define LAST_AXI_OUTPUT_MODE_ENUM = OUTPUT_2_AND_CAMIF_TO_AXI_VIA_OUTPUT_1 6
 
 #define MSM_FRAME_PREV_1	0
 #define MSM_FRAME_PREV_2	1
 #define MSM_FRAME_ENC		2
 
-/*#else
+#else
 
 #define OUTPUT_1 0
 #define OUTPUT_2 1
@@ -367,7 +339,7 @@ struct outputCfg {
 #define OUTPUT_TYPE_S  3
 #define OUTPUT_TYPE_V  4
 
-#endif*/
+#endif
 
 struct msm_frame {
 	int path;
@@ -382,13 +354,7 @@ struct msm_frame {
 
 #define STAT_AEAW	0
 #define STAT_AF		1
-#define STAT_AEC	2
-#define STAT_AWB	3
-#define STAT_RS		4
-#define STAT_CS		5
-#define STAT_IHIST	6
-#define STAT_SKIN	7
-#define STAT_MAX	8
+#define STAT_MAX	2
 
 struct msm_stats_buf {
 	int type;
@@ -457,8 +423,7 @@ struct msm_snapshot_pp_status {
 #define CFG_SET_OV_LSC	29 	/*vincent for LSC calibration*/
 #define CFG_SET_SHARPNESS 30
 #define CFG_SET_SATURATION 31
-#define CFG_SET_OV_LSC_RAW_CAPTURE 32/*20100330 vincent for LSC calibration*/
-#define CFG_MAX	33
+#define CFG_MAX	32
 
 #define MOVE_NEAR	0
 #define MOVE_FAR	1

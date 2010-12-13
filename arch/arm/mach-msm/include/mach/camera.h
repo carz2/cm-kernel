@@ -28,7 +28,7 @@
 #define NUM_AUTOFOCUS_MULTI_WINDOW_GRIDS 16
 #define NUM_STAT_OUTPUT_BUFFERS      3
 #define NUM_AF_STAT_OUTPUT_BUFFERS      3
-#define max_control_command_size 50
+#define max_control_command_size 150
 
 enum msm_queue {
 	MSM_CAM_Q_CTRL,     /* control command or control command status */
@@ -173,7 +173,7 @@ struct msm_control_device {
 	struct msm_device *pmsm;
 
 	/* Used for MSM_CAM_IOCTL_CTRL_CMD_DONE responses */
-	uint8_t ctrl_data[50];
+	uint8_t ctrl_data[max_control_command_size];
 	struct msm_ctrl_cmd ctrl;
 	struct msm_queue_cmd qcmd;
 
@@ -204,6 +204,7 @@ struct axidata {
 	struct msm_pmem_region *region;
 };
 
+#ifdef CONFIG_MSM_CAMERA_V4L2
 /* Below functions are added for V4L2 kernel APIs */
 struct msm_v4l2_driver {
 	struct msm_sync *sync;
@@ -220,6 +221,7 @@ struct msm_v4l2_driver {
 
 int msm_v4l2_register(struct msm_v4l2_driver *);
 int msm_v4l2_unregister(struct msm_v4l2_driver *);
+#endif
 
 void msm_camvfe_init(void);
 int msm_camvfe_check(void *);

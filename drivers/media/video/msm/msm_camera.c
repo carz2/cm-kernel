@@ -185,8 +185,11 @@ static int check_overlap(struct hlist_head *ptype,
 
 static int check_pmem_info(struct msm_pmem_info *info, int len)
 {
+	CDBG("%s: offset 0x%x, len 0x%x, pmem total length 0x%x\n",
+		__func__, info->offset, info->len, len);
+
 	if (info->offset & (PAGE_SIZE - 1)) {
-		pr_err("%s: pmem offset is not page-aligned\n", __func__);
+		pr_err("%s: pmem offset is not page-aligned (PAGE_SIZE = 0x%lx)\n", __func__, PAGE_SIZE);
 		goto error;
 	}
 
@@ -239,9 +242,9 @@ static int msm_pmem_table_add(struct hlist_head *ptype,
 	if (check_overlap(ptype, paddr, len) < 0)
 		return -EINVAL;
 
-	CDBG("%s: type %d, paddr 0x%lx, vaddr 0x%lx\n",
+	CDBG("%s: type %d, paddr 0x%lx, vaddr 0x%lx, len 0x%x\n",
 		__func__,
-		info->type, paddr, (unsigned long)info->vaddr);
+		info->type, paddr, (unsigned long)info->vaddr, info->len);
 
 	region = kzalloc(sizeof(struct msm_pmem_region), GFP_KERNEL);
 	if (!region)
@@ -501,7 +504,7 @@ static int __msm_get_frame(struct msm_sync *sync,
 	frame->y_off = region->info.y_off;
 	frame->cbcr_off = region->info.cbcr_off;
 	frame->fd = region->info.fd;
-/*	frame->path = vdata->phy.output_id;*/
+	frame->path = vdata->phy.output_id;
 	CDBG("%s: y %x, cbcr %x, qcmd %x, virt_addr %x\n",
 		__func__,
 		pphy->y_phy, pphy->cbcr_phy, (int) qcmd, (int) frame->buffer);
@@ -994,6 +997,7 @@ static int msm_get_stats(struct msm_sync *sync, void __user *arg)
 		se.ctrl_cmd.resp_fd = ctrl->resp_fd;
 		break;
 
+#ifdef CONFIG_MSM_CAMERA_V4L2
 	case MSM_CAM_Q_V4L2_REQ:
 		/* control command from v4l2 client */
 		ctrl = (struct msm_ctrl_cmd *)(qcmd->command);
@@ -1016,6 +1020,7 @@ static int msm_get_stats(struct msm_sync *sync, void __user *arg)
 		se.ctrl_cmd.type   = ctrl->type;
 		se.ctrl_cmd.length = ctrl->length;
 		break;
+#endif
 
 	default:
 		rc = -EFAULT;
@@ -2353,6 +2358,7 @@ static int msm_open_control(struct inode *inode, struct file *filep)
 	return rc;
 }
 
+#ifdef CONFIG_MSM_CAMERA_V4L2
 static int __msm_v4l2_control(struct msm_sync *sync,
 		struct msm_ctrl_cmd *out)
 {
@@ -2389,6 +2395,7 @@ end:
 	CDBG("%s: rc %d\n", __func__, rc);
 	return rc;
 }
+#endif
 
 static const struct file_operations msm_fops_config = {
 	.owner = THIS_MODULE,
@@ -2614,7 +2621,7 @@ error:
 	return ret;
 }
 
-
+#ifdef CONFIG_MSM_CAMERA_V4L2
 int msm_v4l2_register(struct msm_v4l2_driver *drv)
 {
 	/* FIXME: support multiple sensors */
@@ -2641,6 +2648,7 @@ int msm_v4l2_unregister(struct msm_v4l2_driver *drv)
 	return 0;
 }
 EXPORT_SYMBOL(msm_v4l2_unregister);
+#endif
 
 static int msm_sync_init(struct msm_sync *sync,
 		struct platform_device *pdev,

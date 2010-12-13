@@ -308,10 +308,17 @@ void __init msm_add_mem_devices(struct msm_pmem_setting *setting)
 		res->start = setting->pmem_gpu0_start;
 		res->end = res->start + setting->pmem_gpu0_size - 1;
 
+ 	printk("%s: hw3d_device smi @0x%08x, size 0x%08x\n",
+		__func__, resources_hw3d[1].start, resources_hw3d[1].end);
+
 		res = platform_get_resource_byname(&hw3d_device, IORESOURCE_MEM,
 						   "ebi");
 		res->start = setting->pmem_gpu1_start;
 		res->end = res->start + setting->pmem_gpu1_size - 1;
+
+        printk("%s: hw3d_device ebi @0x%08x, size 0x%08x\n",
+		__func__, resources_hw3d[2].start, resources_hw3d[2].end);
+
 		platform_device_register(&hw3d_device);
 	}
 
