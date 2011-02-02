@@ -46,12 +46,12 @@ config MSM_MDP22
 config MSM_MDP31
 	bool
 	depends on ARCH_QSD8X50
-	default y
+	default n
 
 config MSM_MDP40
 	bool
 	depends on ARCH_MSM7X30
-	default y
+	default n
 
 config PERFLOCK
   depends on CPU_FREQ
@@ -115,13 +115,14 @@ config MSM_AMSS_VERSION
 	default 6220 if MSM_AMSS_VERSION_6220
 	default 6225 if MSM_AMSS_VERSION_6225
 	default 6350 if MSM_AMSS_VERSION_6350
+	default 6355 if MSM_AMSS_VERSION_6355
         default 3200 if MSM_AMSS_VERSION_3200
 
 choice
 	prompt "AMSS modem firmware version"
 
 	depends on ARCH_MSM7X00A || ARCH_QSD8X50
-	default MSM_AMSS_VERSION_6225
+	default MSM_AMSS_VERSION_6355
 
 	config MSM_AMSS_VERSION_6210
 		bool "6.2.10"
@@ -137,7 +138,11 @@ choice
 
 	config MSM_AMSS_VERSION_6350
 		bool "6.3.50"
-         
+
+	config MSM_AMSS_VERSION_6355
+		bool "6.3.55"    
+  		select MSM_LEGACY_7X00A_AMSS
+   
          config MSM_AMSS_VERSION_3200
  	        bool "3.2.00"
 endchoice
@@ -198,7 +203,7 @@ config MACH_QSD8X50A_ST1_5
 endmenu
 
 config MSM_AMSS_SUPPORT_256MB_EBI1
-        default n
+        default y
         bool "AMSS that support unified 128MB and 256MB EBI1"
 
 config MSM_AMSS_RADIO2708_MEMMAP
@@ -317,8 +322,13 @@ config HTC_35MM_JACK
 
 config TROUT_BATTCHG
 	depends on MACH_TROUT && POWER_SUPPLY
-	default y
+	default n
 	bool "Trout battery / charger driver"
+
+config SAPPHIRE_BATTCHG
+	depends on MACH_SAPPHIRE && POWER_SUPPLY
+	default y
+	bool "Sapphire 6355 battery / charger driver"
 
 config HTC_BATTCHG
 	depends on MSM_ONCRPCROUTER && POWER_SUPPLY
@@ -586,6 +596,13 @@ config MSM_HW3D
 config MSM_ADSP
 	depends on ARCH_MSM7X00A
 	tristate "MSM ADSP driver"
+	default n
+	help
+	  Provides access to registers needed by the userspace aDSP library.
+
+config MSM_ADSP_COMP
+	depends on ARCH_MSM7X00A
+	tristate "MSM ADSP support init info by RPC"
 	default y
 	help
 	  Provides access to registers needed by the userspace aDSP library.

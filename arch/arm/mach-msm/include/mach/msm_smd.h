@@ -64,6 +64,7 @@ void smd_kick(smd_channel_t *ch);
 int smd_wait_until_readable(smd_channel_t *ch, int bytes);
 int smd_wait_until_writable(smd_channel_t *ch, int bytes);
 #endif
+int smd_wait_until_opened(smd_channel_t *ch, int timeout_us);
 
 typedef enum {
 	SMD_PORT_DS = 0,

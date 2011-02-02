@@ -36,7 +36,7 @@ static const char *rpc_versions[] = {
 	"rs30000048:00040000",
 	"rs30000048:00010000",
 #else
-	"rs30000048:0da5b528",
+	"rs30000048:00010001",
 #endif
 };
 

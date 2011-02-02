@@ -81,7 +81,7 @@ module_param_named(idle_spin_time, msm_pm_idle_spin_time, int, S_IRUGO | S_IWUSR
 #define A11RAMBACKBIAS (MSM_CSR_BASE + 0x508)
 #endif
 
-
+#if !defined(CONFIG_MSM_LEGACY_7X00A_AMSS)
 #define DEM_MASTER_BITS_PER_CPU             6
 
 /* Power Master State Bits - Per CPU */
@@ -109,6 +109,7 @@ module_param_named(idle_spin_time, msm_pm_idle_spin_time, int, S_IRUGO | S_IWUSR
 #define DEM_SLAVE_SMSM_MSGS_REDUCED         (0x0080)
 #define DEM_SLAVE_SMSM_RESET                (0x0100)
 #define DEM_SLAVE_SMSM_PWRC_SUSPEND         (0x0200)
+#endif
 
 #ifndef CONFIG_ARCH_MSM_SCORPION
 #define PM_SMSM_WRITE_STATE	SMSM_STATE_APPS
@@ -791,7 +792,7 @@ void msm_pm_set_max_sleep_time(int64_t max_sleep_time_ns)
 }
 EXPORT_SYMBOL(msm_pm_set_max_sleep_time);
 
-#if defined(CONFIG_EARLYSUSPEND) && defined(CONFIG_ARCH_MSM_SCORPION)
+#if defined(CONFIG_EARLYSUSPEND)
 #ifdef CONFIG_AXI_SCREEN_POLICY
 /* axi 128 screen on, 61mhz screen off */
 static void axi_early_suspend(struct early_suspend *handler) {
@@ -815,7 +816,7 @@ static struct early_suspend axi_screen_suspend = {
 #ifdef CONFIG_AXI_SCREEN_POLICY
 static void __init msm_pm_axi_init(void)
 {
-#if defined(CONFIG_EARLYSUSPEND) && defined(CONFIG_ARCH_MSM_SCORPION)
+#if defined(CONFIG_EARLYSUSPEND)
 	axi_clk = clk_get(NULL, "ebi1_clk");
 	if (IS_ERR(axi_clk)) {
 		int result = PTR_ERR(axi_clk);

@@ -59,8 +59,11 @@ void msm_init_last_radio_log(struct module *owner)
 		pr_err("%s: already claimed\n", __func__);
 		return;
 	}
-
-	radio_log_base = smem_item(SMEM_CLKREGIM_BSP, &radio_log_size);
+#if defined(CONFIG_MSM_ADSP_COMP)
+	radio_log_base = NULL;
+#else
+	radio_log_base = smem_item(SMEM_CLKREGIM_BSP, &radio_log_size);	
+#endif
 	if (!radio_log_base) {
 		pr_err("%s: could not retrieve SMEM_CLKREGIM_BSP\n", __func__);
 		return;

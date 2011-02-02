@@ -76,8 +76,8 @@
 #define P_VFE_MDC_CLK	40  /* VFE MDDI client clock */
 #define P_VFE_CLK	41  /* Camera / Video Front End clock */
 #else/* For radio code base others */
-#define P_VFE_MDC_CLK	41  /* VFE MDDI client clock */
-#define P_VFE_CLK	40  /* Camera / Video Front End clock */
+#define P_VFE_MDC_CLK	40  /* VFE MDDI client clock */
+#define P_VFE_CLK	41  /* Camera / Video Front End clock */
 #endif
 #define P_MDP_LCDC_PCLK_CLK	42
 #define P_MDP_LCDC_PAD_PCLK_CLK 43

@@ -26,7 +26,7 @@
 #if defined(CONFIG_ARCH_MSM7X30)
 #define PM_LIBVERS        0x00030001
 #elif defined(CONFIG_MSM_LEGACY_7X00A_AMSS)
-#define PM_LIBVERS	  0xfb837d0b
+#define PM_LIBVERS	  0x00010001
 #else
 #define PM_LIBVERS	  MSM_RPC_VERS(1,1)
 #endif

@@ -22,7 +22,7 @@
 #include <linux/list.h>
 #include <linux/platform_device.h>
 
-#if !defined(CONFIG_MSM_LEGACY_7X00A_AMSS)
+//#if !defined(CONFIG_MSM_LEGACY_7X00A_AMSS)
 /* RPC API version structure
  * Version bit 31 : 1->hashkey versioning,
  *                  0->major-minor (backward compatible) versioning
@@ -45,11 +45,11 @@
 #define MSM_RPC_GET_MAJOR(vers) (((vers) & RPC_VERSION_MAJOR_MASK) >>	\
 					RPC_VERSION_MAJOR_OFFSET)
 #define MSM_RPC_GET_MINOR(vers) ((vers) & RPC_VERSION_MINOR_MASK)
-#else
+/*#else
 #define MSM_RPC_VERS(major, minor) (major)
 #define MSM_RPC_GET_MAJOR(vers) (vers)
 #define MSM_RPC_GET_MINOR(vers) 0
-#endif
+#endif*/
 
 struct msm_rpc_endpoint;
 
