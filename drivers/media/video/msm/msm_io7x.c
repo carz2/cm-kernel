@@ -81,6 +81,13 @@ int msm_camio_clk_enable(enum msm_camio_clk_type clktype)
 
 	/* HTC: check clk */
 	if (!IS_ERR(clk) && clk) {
+
+		if (clktype == CAMIO_VFE_CLK && camio_vfe_clk) {
+			/* msm_camio_clk_sel MSM_CAMIO_CLK_SRC_INTERNAL:*/
+			clk_set_flags(clk, 0x00000100 << 1);
+			clk_set_rate(clk, 24000000);
+		}
+
 		clk_enable(clk);
 		rc = 0;
 	}

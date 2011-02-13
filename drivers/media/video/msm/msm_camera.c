@@ -128,13 +128,13 @@ static void msm_enqueue(struct msm_device_queue *queue,
 	struct msm_device_queue *__q = (queue);			\
 	struct msm_queue_cmd *qcmd = 0;					\
 	spin_lock_irqsave(&__q->lock, flags);			\
-	if (!list_empty(&__q->list)) {					\
-		__q->len--;									\
-		qcmd = list_first_entry(&__q->list,			\
-				struct msm_queue_cmd, member);		\
+	if (!list_empty(&__q->list)) {				\
+		__q->len--;					\
+		qcmd = list_first_entry(&__q->list,		\
+				struct msm_queue_cmd, member);	\
 				if (qcmd) {                         \
-					list_del_init(&qcmd->member);	\
-				}                                   \
+		list_del_init(&qcmd->member);			\
+	}							\
 	}												\
 	spin_unlock_irqrestore(&__q->lock, flags);		\
 	qcmd;											\
@@ -330,7 +330,7 @@ static unsigned long msm_pmem_stats_ptov_lookup(struct msm_sync *sync,
 			return (unsigned long)(region->info.vaddr);
 		}
 	}
-#if 1
+#if 0
 	printk("msm_pmem_stats_ptov_lookup: lookup vaddr..\n");
 	hlist_for_each_entry_safe(region, node, n, &sync->pmem_stats, list) {
 		if (addr == (unsigned long)(region->info.vaddr)) {
@@ -464,7 +464,7 @@ static int __msm_get_frame(struct msm_sync *sync,
 	struct msm_vfe_phy_info *pphy;
 
 	if (&sync->frame_q) {
-		qcmd = msm_dequeue(&sync->frame_q, list_frame);
+	qcmd = msm_dequeue(&sync->frame_q, list_frame);
 	}
 
 	if (!qcmd) {
@@ -494,7 +494,7 @@ static int __msm_get_frame(struct msm_sync *sync,
 	frame->y_off = region->info.y_off;
 	frame->cbcr_off = region->info.cbcr_off;
 	frame->fd = region->info.fd;
-	frame->path = vdata->phy.output_id;
+/*	frame->path = vdata->phy.output_id;*/
 	CDBG("%s: y %x, cbcr %x, qcmd %x, virt_addr %x\n",
 		__func__,
 		pphy->y_phy, pphy->cbcr_phy, (int) qcmd, (int) frame->buffer);

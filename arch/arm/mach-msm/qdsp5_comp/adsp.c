@@ -442,13 +442,13 @@ int __msm_adsp_write(struct msm_adsp_module *module, unsigned dsp_queue_addr,
 	while (((ctrl_word = readl(info->write_ctrl)) &
 		ADSP_RTOS_WRITE_CTRL_WORD_READY_M) !=
 		ADSP_RTOS_WRITE_CTRL_WORD_READY_V) {
-		if (cnt > 100) {
+		if (cnt > 10) {
 			pr_err("adsp: timeout waiting for DSP write ready\n");
 			ret_status = -EIO;
 			goto fail;
 		}
 		pr_warning("adsp: waiting for DSP write ready\n");
-		udelay(1);
+		udelay(10);
 		cnt++;
 	}
 
@@ -479,12 +479,12 @@ int __msm_adsp_write(struct msm_adsp_module *module, unsigned dsp_queue_addr,
 	while ((readl(info->write_ctrl) &
 		ADSP_RTOS_WRITE_CTRL_WORD_MUTEX_M) ==
 		ADSP_RTOS_WRITE_CTRL_WORD_MUTEX_NAVAIL_V) {
-		if (cnt > 5000) {
+		if (cnt > 5) {
 			pr_err("adsp: timeout waiting for adsp ack\n");
 			ret_status = -EIO;
 			goto fail;
 		}
-		udelay(1);
+		mdelay(1);
 		cnt++;
 	}
 
@@ -742,8 +742,8 @@ static void handle_adsp_rtos_mtoa_app(struct rpc_request_hdr *req)
 	rpc_send_accepted_void_reply(rpc_cb_server_client, req->xid,
 				     RPC_ACCEPTSTAT_SUCCESS);
 
-	/*if (module->ops->modem_event != NULL)
-		module->ops->modem_event(module->driver_data, image);*/
+	if (module->ops->modem_event != NULL)
+		module->ops->modem_event(module->driver_data, image);
 done:
 	mutex_unlock(&module->lock);
 	event_addr = (uint32_t *)req;
