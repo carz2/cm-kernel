@@ -191,6 +191,8 @@ struct usb_ctrlrequest {
 #define USB_DT_WIRE_ADAPTER		0x21
 #define USB_DT_RPIPE			0x22
 #define USB_DT_CS_RADIO_CONTROL		0x23
+/* From the T10 UAS specification */
+#define USB_DT_PIPE_USAGE		0x24
 /* From the USB 3.0 spec */
 #define	USB_DT_SS_ENDPOINT_COMP		0x30
 
@@ -556,6 +558,8 @@ struct usb_ss_ep_comp_descriptor {
 } __attribute__ ((packed));
 
 #define USB_DT_SS_EP_COMP_SIZE		6
+/* Bits 4:0 of bmAttributes if this is a bulk endpoint */
+#define USB_SS_MAX_STREAMS(p)		(1 << (p & 0x1f))
 
 /*-------------------------------------------------------------------------*/
 
