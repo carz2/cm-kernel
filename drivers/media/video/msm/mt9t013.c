@@ -1116,6 +1116,84 @@ static int mt9t013_sensor_init_done(const struct msm_camera_sensor_info *data)
 	return 0;
 }
 
+/*CC100115*/
+static int mt9t013_i2c_read_fuseid(struct sensor_cfg_data *cdata)
+{
+
+//Set REG= 0x301A[5], 0x01     // RESET_REGISTER
+//And read
+//REG= 0x31F4,         // FUSE_ID1
+//REG= 0x31F6,         // FUSE_ID2
+//REG= 0x31F8,         // FUSE_ID3
+//REG= 0x31FA,        // FUSE_ID4
+
+	int rc;
+	uint16_t regData;
+
+	printk(KERN_INFO "mt9t013_i2c_read_fuseid\n");
+
+	/* Read out reg and enable this bit ----------------------------------------------*/
+	rc = mt9t013_i2c_read_w(mt9t013_client->addr,
+		MT9T013_REG_RESET_REGISTER, &regData);
+
+	if (rc < 0)
+		goto fail;
+
+	rc = mt9t013_i2c_write_w(mt9t013_client->addr,
+			MT9T013_REG_RESET_REGISTER,
+			regData | 0x00020);
+
+	if (rc < 0)
+		goto fail;
+
+	rc = mt9t013_i2c_read_w(mt9t013_client->addr,
+		0x31F4, &regData);
+
+	if (rc < 0)
+		goto fail;
+
+	cdata->cfg.fuse.fuse_id_word1 = (uint32_t) regData;
+
+	rc = mt9t013_i2c_read_w(mt9t013_client->addr,
+		0x31F6, &regData);
+
+	if (rc < 0)
+		goto fail;
+
+	cdata->cfg.fuse.fuse_id_word2 = (uint32_t) regData;
+
+	rc = mt9t013_i2c_read_w(mt9t013_client->addr,
+		0x31F8, &regData);
+
+	if (rc < 0)
+		goto fail;
+
+	cdata->cfg.fuse.fuse_id_word3 = (uint32_t) regData;
+
+	rc = mt9t013_i2c_read_w(mt9t013_client->addr,
+		0x31FA, &regData);
+	
+	if (rc < 0)
+		goto fail;
+
+	cdata->cfg.fuse.fuse_id_word4 = (uint32_t) regData;
+
+#if 1
+
+	printk(KERN_INFO "cdata->cfg.fuse.fuse_id_word1 = %x \n", cdata->cfg.fuse.fuse_id_word1);
+	printk(KERN_INFO "cdata->cfg.fuse.fuse_id_word2 = %x \n", cdata->cfg.fuse.fuse_id_word2);
+	printk(KERN_INFO "cdata->cfg.fuse.fuse_id_word3 = %x \n", cdata->cfg.fuse.fuse_id_word3);
+	printk(KERN_INFO "cdata->cfg.fuse.fuse_id_word4 = %x \n", cdata->cfg.fuse.fuse_id_word4);
+#endif
+
+	return 0;
+
+fail:
+	return rc;
+}
+/*CC100115~*/
+
+
 static int mt9t013_probe_init_sensor(const struct msm_camera_sensor_info *data)
 {
 	int rc;
@@ -1138,6 +1216,12 @@ static int mt9t013_probe_init_sensor(const struct msm_camera_sensor_info *data)
 	/* 3. Read sensor Model ID: */
 	rc = mt9t013_i2c_read_w(mt9t013_client->addr,
 				MT9T013_REG_MODEL_ID, &chipid);
+
+/*CC100115*/
+#if 0
+	struct sensor_cfg_data cdata;
+		mt9t013_i2c_read_fuseid(&cdata);
+#endif
 
 	if (rc < 0)
 		goto init_probe_fail;
@@ -1375,6 +1459,13 @@ int mt9t013_sensor_config(void __user *argp)
 
 	case CFG_SET_DEFAULT_FOCUS:
 		rc = mt9t013_set_default_focus(cdata.cfg.focus.steps);
+		break;
+
+	case CFG_I2C_IOCTL_R_OTP:{
+		rc = mt9t013_i2c_read_fuseid(&cdata);
+		if (copy_to_user(argp, &cdata, sizeof(struct sensor_cfg_data)))
+			rc = -EFAULT;
+		}
 		break;
 
 	case CFG_GET_AF_MAX_STEPS:
