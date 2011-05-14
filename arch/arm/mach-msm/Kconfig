@@ -440,20 +440,6 @@ config MSM_ADSP_COMP_CM
        help
          Provides access to registers needed by the userspace aDSP library.
 
-config MSM_ADSP_COMP_BUZZ
-       depends on ARCH_MSM7X00A
-       tristate "MSM ADSP BUZZ support init info by RPC"
-       default n
-       help
-         Provides access to registers needed by the userspace aDSP library.
-
-config MSM_ADSP_COMP_SENSE
-       depends on ARCH_MSM7X00A
-       tristate "MSM ADSP SENSE support init info by RPC"
-       default n
-       help
-         Provides access to registers needed by the userspace aDSP library.
-
 config MSM_QDSP6
 	tristate "QDSP6 support"
 	depends on ARCH_QSD8X50
