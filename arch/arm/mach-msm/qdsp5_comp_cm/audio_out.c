@@ -42,6 +42,19 @@
 
 #include "evlog.h"
 
+#include <linux/rtc.h>
+
+#define AUDIO_LOG(x...) do { \
+struct timespec ts; \
+struct rtc_time tm; \
+getnstimeofday(&ts); \
+rtc_time_to_tm(ts.tv_sec, &tm); \
+printk(KERN_INFO "AUDIO: " x); \
+printk(" at %lld (%d-%02d-%02d %02d:%02d:%02d.%09lu UTC)\n", \
+ktime_to_ns(ktime_get()), tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, \
+tm.tm_hour, tm.tm_min, tm.tm_sec, ts.tv_nsec); \
+} while (0)
+
 #define LOG_AUDIO_EVENTS 1
 #define LOG_AUDIO_FAULTS 0
 
@@ -84,7 +97,7 @@ static int __init _pcm_log_init(void)
 }
 module_init(_pcm_log_init);
 
-#define LOG(id,arg) ev_log_write(&pcm_log, id, arg)
+#define LOG(id, arg) ev_log_write(&pcm_log, id, arg)
 #endif
 
 
@@ -93,55 +106,6 @@ module_init(_pcm_log_init);
 
 #define BUFSZ (960 * 5)
 #define DMASZ (BUFSZ * 2)
-
-#define AUDPP_CMD_CFG_OBJ_UPDATE 0x8000
-#define AUDPP_CMD_EQ_FLAG_DIS	0x0000
-#define AUDPP_CMD_EQ_FLAG_ENA	-1
-#define AUDPP_CMD_IIR_FLAG_DIS	  0x0000
-#define AUDPP_CMD_IIR_FLAG_ENA	  -1
-
-#define AUDPP_CMD_IIR_TUNING_FILTER  1
-#define AUDPP_CMD_EQUALIZER	2
-#define AUDPP_CMD_ADRC	3
-
-#define ADRC_ENABLE  0x0001
-#define EQ_ENABLE    0x0002
-#define IIR_ENABLE   0x0004
-
-struct adrc_filter {
-	uint16_t compression_th;
-	uint16_t compression_slope;
-	uint16_t rms_time;
-	uint16_t attack_const_lsw;
-	uint16_t attack_const_msw;
-	uint16_t release_const_lsw;
-	uint16_t release_const_msw;
-	uint16_t adrc_system_delay;
-};
-
-struct eqalizer {
-	uint16_t num_bands;
-	uint16_t eq_params[132];
-};
-
-struct rx_iir_filter {
-	uint16_t num_bands;
-	uint16_t iir_params[48];
-};
-
-typedef struct {
-	audpp_cmd_cfg_object_params_common common;
-	uint16_t eq_flag;
-	uint16_t num_bands;
-	uint16_t eq_params[132];
-} audpp_cmd_cfg_object_params_eq;
-
-typedef struct {
-	audpp_cmd_cfg_object_params_common common;
-	uint16_t active_flag;
-	uint16_t num_bands;
-	uint16_t iir_params[48];
-} audpp_cmd_cfg_object_params_rx_iir;
 
 struct buffer {
 	void *data;
@@ -186,19 +150,18 @@ struct audio {
 	struct wake_lock wakelock;
 	struct wake_lock idlelock;
 
-	int adrc_enable;
-	struct adrc_filter adrc;
+	/* variables to support image swap*/
+	atomic_t image_swap;
+	atomic_t audpp_image_swap_notify;
+	struct work_struct work;
+	wait_queue_head_t audpp_wait;
 
-	int eq_enable;
-	struct eqalizer eq;
-
-	int rx_iir_enable;
-	struct rx_iir_filter iir;
 };
 
 static void audio_prevent_sleep(struct audio *audio)
 {
 	printk(KERN_INFO "++++++++++++++++++++++++++++++\n");
+	AUDIO_LOG("AUDIO PLAYBACK START");
 	wake_lock(&audio->wakelock);
 	wake_lock(&audio->idlelock);
 }
@@ -207,16 +170,23 @@ static void audio_allow_sleep(struct audio *audio)
 {
 	wake_unlock(&audio->wakelock);
 	wake_unlock(&audio->idlelock);
+	AUDIO_LOG("AUDIO PLAYBACK OFF");
 	printk(KERN_INFO "------------------------------\n");
 }
 
 static int audio_dsp_out_enable(struct audio *audio, int yes);
-static int audio_dsp_send_buffer(struct audio *audio, unsigned id, unsigned len);
-static int audio_dsp_set_adrc(struct audio *audio);
-static int audio_dsp_set_eq(struct audio *audio);
-static int audio_dsp_set_rx_iir(struct audio *audio);
+static int audio_dsp_send_buffer(struct audio *audio,
+		unsigned id, unsigned len);
 
 static void audio_dsp_event(void *private, unsigned id, uint16_t *msg);
+static void audio_audmgr_cb(void);
+
+static void audpp_modem_event(void *private, unsigned image_swap)
+{
+	struct audio *audio = private;
+	atomic_set(&audio->audpp_image_swap_notify, image_swap);
+	wake_up(&audio->audpp_wait);
+}
 
 /* must be called with audio->lock held */
 static int audio_enable(struct audio *audio)
@@ -227,7 +197,7 @@ static int audio_enable(struct audio *audio)
 	pr_info("audio_enable()\n");
 
 	if (audio->enabled)
-		return 0;	
+		return 0;
 
 	/* refuse to start if we're not ready */
 	if (!audio->out[0].used || !audio->out[1].used)
@@ -245,14 +215,15 @@ static int audio_enable(struct audio *audio)
 	cfg.codec = RPC_AUD_DEF_CODEC_PCM;
 	cfg.snd_method = RPC_SND_METHOD_MIDI;
 
-	audio_prevent_sleep(audio);	
+	audio_prevent_sleep(audio);
+	audio->audmgr.cb = audio_audmgr_cb;
 	rc = audmgr_enable(&audio->audmgr, &cfg);
 	if (rc < 0) {
 		audio_allow_sleep(audio);
 		return rc;
 	}
 
-	if (audpp_enable(-1, audio_dsp_event, audio)) {
+	if (audpp_enable(-1, audio_dsp_event, audpp_modem_event, audio)) {
 		pr_err("audio: audpp_enable() failed\n");
 		audmgr_disable(&audio->audmgr);
 		audio_allow_sleep(audio);
@@ -260,15 +231,15 @@ static int audio_enable(struct audio *audio)
 	}
 
 	audio->enabled = 1;
-	htc_pwrsink_set(PWRSINK_AUDIO, 100);
+	htc_pwrsink_audio_set(PWRSINK_AUDIO_PCM, 100);
 	return 0;
 }
 
 /* must be called with audio->lock held */
 static int audio_disable(struct audio *audio)
 {
-	pr_info("audio_disable()\n");
 	if (audio->enabled) {
+		pr_info("audio_disable()\n");
 		audio->enabled = 0;
 		audio_dsp_out_enable(audio, 0);
 
@@ -278,6 +249,7 @@ static int audio_disable(struct audio *audio)
 		audmgr_disable(&audio->audmgr);
 		audio->out_needed = 0;
 		audio_allow_sleep(audio);
+		htc_pwrsink_audio_set(PWRSINK_AUDIO_PCM, 0);
 	}
 	return 0;
 }
@@ -294,8 +266,10 @@ static void audio_dsp_event(void *private, unsigned id, uint16_t *msg)
 	case AUDPP_MSG_HOST_PCM_INTF_MSG: {
 		unsigned id = msg[2];
 		unsigned idx = msg[3] - 1;
+		int rc;
 
-		/* pr_info("audio_dsp_event: HOST_PCM id %d idx %d\n", id, idx); */
+		/* pr_info("audio_dsp_event:
+		HOST_PCM id %d idx %d\n", id, idx); */
 		if (id != AUDPP_MSG_HOSTPCM_ID_ARM_RX) {
 			pr_err("bogus id\n");
 			break;
@@ -312,9 +286,10 @@ static void audio_dsp_event(void *private, unsigned id, uint16_t *msg)
 
 			frame = audio->out + audio->out_tail;
 			if (frame->used) {
-				audio_dsp_send_buffer(
+				rc = audio_dsp_send_buffer(
 					audio, audio->out_tail, frame->used);
-				audio->out_tail ^= 1;
+				if (!rc)
+					audio->out_tail ^= 1;
 			} else {
 				audio->out_needed++;
 			}
@@ -333,9 +308,6 @@ static void audio_dsp_event(void *private, unsigned id, uint16_t *msg)
 			audio->out_needed = 0;
 			audio->running = 1;
 			audpp_set_volume_and_pan(5, audio->volume, 0);
-			audio_dsp_set_adrc(audio);
-			audio_dsp_set_eq(audio);
-			audio_dsp_set_rx_iir(audio);
 			audio_dsp_out_enable(audio, 1);
 		} else if (msg[0] == AUDPP_MSG_ENA_DIS) {
 			LOG(EV_ENABLE, 0);
@@ -355,7 +327,7 @@ static int audio_dsp_out_enable(struct audio *audio, int yes)
 	audpp_cmd_pcm_intf cmd;
 
 	memset(&cmd, 0, sizeof(cmd));
-	cmd.cmd_id	= AUDPP_CMD_PCM_INTF_2; 
+	cmd.cmd_id	= AUDPP_CMD_PCM_INTF_2;
 	cmd.object_num	= AUDPP_CMD_PCM_INTF_OBJECT_NUM;
 	cmd.config	= AUDPP_CMD_PCM_INTF_CONFIG_CMD_V;
 	cmd.intf_type	= AUDPP_CMD_PCM_INTF_RX_ENA_ARMTODSP_V;
@@ -374,14 +346,20 @@ static int audio_dsp_out_enable(struct audio *audio, int yes)
 		cmd.sample_rate		= audio->out_sample_rate;
 		cmd.channel_mode	= audio->out_channel_mode;
 	}
-	
+
 	return audpp_send_queue2(&cmd, sizeof(cmd));
 }
 
-static int audio_dsp_send_buffer(struct audio *audio, unsigned idx, unsigned len)
+static int audio_dsp_send_buffer(struct audio *audio,
+		unsigned idx, unsigned len)
 {
 	audpp_cmd_pcm_intf_send_buffer cmd;
-	
+
+	if (atomic_read(&audio->image_swap)) {
+		pr_err("audio_dsp_send_buffer: image swap\n");
+		return -1;
+	}
+
 	cmd.cmd_id		= AUDPP_CMD_PCM_INTF_2;
 	cmd.host_pcm_object	= AUDPP_CMD_PCM_INTF_OBJECT_NUM;
 	cmd.config		= AUDPP_CMD_PCM_INTF_BUFFER_CMD_V;
@@ -394,100 +372,7 @@ static int audio_dsp_send_buffer(struct audio *audio, unsigned idx, unsigned len
 	return audpp_send_queue2(&cmd, sizeof(cmd));
 }
 
-static int audio_dsp_set_adrc(struct audio *audio)
-{
-	audpp_cmd_cfg_object_params_adrc cmd;
-
-	memset(&cmd, 0, sizeof(cmd));
-	cmd.common.comman_cfg = AUDPP_CMD_CFG_OBJ_UPDATE;
-	cmd.common.command_type = AUDPP_CMD_ADRC;
-
-	if (audio->adrc_enable) {
-		cmd.adrc_flag = AUDPP_CMD_ADRC_FLAG_ENA;
-		cmd.compression_th = audio->adrc.compression_th;
-		cmd.compression_slope = audio->adrc.compression_slope;
-		cmd.rms_time = audio->adrc.rms_time;
-		cmd.attack_const_lsw = audio->adrc.attack_const_lsw;
-		cmd.attack_const_msw = audio->adrc.attack_const_msw;
-		cmd.release_const_lsw = audio->adrc.release_const_lsw;
-		cmd.release_const_msw = audio->adrc.release_const_msw;
-		cmd.adrc_system_delay = audio->adrc.adrc_system_delay;
-	} else {
-		cmd.adrc_flag = AUDPP_CMD_ADRC_FLAG_DIS;
-	}
-	return audpp_send_queue3(&cmd, sizeof(cmd));
-}
-
-static int audio_dsp_set_eq(struct audio *audio)
-{
-	audpp_cmd_cfg_object_params_eq cmd;
-
-	memset(&cmd, 0, sizeof(cmd));
-	cmd.common.comman_cfg = AUDPP_CMD_CFG_OBJ_UPDATE;
-	cmd.common.command_type = AUDPP_CMD_EQUALIZER;
-
-	if (audio->eq_enable) {
-		cmd.eq_flag = AUDPP_CMD_EQ_FLAG_ENA;
-		cmd.num_bands = audio->eq.num_bands;
-		memcpy(&cmd.eq_params, audio->eq.eq_params,
-		       sizeof(audio->eq.eq_params));
-	} else {
-		cmd.eq_flag = AUDPP_CMD_EQ_FLAG_DIS;
-	}
-	return audpp_send_queue3(&cmd, sizeof(cmd));
-}
-
-static int audio_dsp_set_rx_iir(struct audio *audio)
-{
-	audpp_cmd_cfg_object_params_rx_iir cmd;
-
-	memset(&cmd, 0, sizeof(cmd));
-	cmd.common.comman_cfg = AUDPP_CMD_CFG_OBJ_UPDATE;
-	cmd.common.command_type = AUDPP_CMD_IIR_TUNING_FILTER;
-
-	if (audio->rx_iir_enable) {
-		cmd.active_flag = AUDPP_CMD_IIR_FLAG_ENA;
-		cmd.num_bands = audio->iir.num_bands;
-		memcpy(&cmd.iir_params, audio->iir.iir_params,
-		       sizeof(audio->iir.iir_params));
-	} else {
-		cmd.active_flag = AUDPP_CMD_IIR_FLAG_DIS;
-	}
-
-	return audpp_send_queue3(&cmd, sizeof(cmd));
-}
-
 /* ------------------- device --------------------- */
-
-static int audio_enable_adrc(struct audio *audio, int enable)
-{
-	if (audio->adrc_enable != enable) {
-		audio->adrc_enable = enable;
-		if (audio->running)
-			audio_dsp_set_adrc(audio);
-	}
-	return 0;
-}
-
-static int audio_enable_eq(struct audio *audio, int enable)
-{
-	if (audio->eq_enable != enable) {
-		audio->eq_enable = enable;
-		if (audio->running)
-			audio_dsp_set_eq(audio);
-	}
-	return 0;
-}
-
-static int audio_enable_rx_iir(struct audio *audio, int enable)
-{
-	if (audio->rx_iir_enable != enable) {
-		audio->rx_iir_enable = enable;
-		if (audio->running)
-			audio_dsp_set_rx_iir(audio);
-	}
-	return 0;
-}
 
 static void audio_flush(struct audio *audio)
 {
@@ -506,7 +391,7 @@ static long audio_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	if (cmd == AUDIO_GET_STATS) {
 		struct msm_audio_stats stats;
 		stats.byte_count = atomic_read(&audio->out_bytes);
-		if (copy_to_user((void*) arg, &stats, sizeof(stats)))
+		if (copy_to_user((void *) arg, &stats, sizeof(stats)))
 			return -EFAULT;
 		return 0;
 	}
@@ -514,9 +399,13 @@ static long audio_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		unsigned long flags;
 		spin_lock_irqsave(&audio->dsp_lock, flags);
 		audio->volume = arg;
-		if (audio->running)
+		if (audio->running) {
 			audpp_set_volume_and_pan(6, arg, 0);
+			htc_pwrsink_audio_volume_set(PWRSINK_AUDIO_PCM,
+					audio->volume);
+		}
 		spin_unlock_irqrestore(&audio->dsp_lock, flags);
+		return 0;
 	}
 
 	LOG(EV_IOCTL, cmd);
@@ -540,17 +429,21 @@ static long audio_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 			mutex_lock(&audio->write_lock);
 			audio_flush(audio);
 			mutex_unlock(&audio->write_lock);
+			rc = 0;
+		} else {
+			rc = -EFAULT;
 		}
+		break;
 	case AUDIO_SET_CONFIG: {
 		struct msm_audio_config config;
-		if (copy_from_user(&config, (void*) arg, sizeof(config))) {
+		if (copy_from_user(&config, (void *) arg, sizeof(config))) {
 			rc = -EFAULT;
 			break;
 		}
 		if (config.channel_count == 1) {
 			config.channel_count = AUDPP_CMD_PCM_INTF_MONO_V;
 		} else if (config.channel_count == 2) {
-			config.channel_count= AUDPP_CMD_PCM_INTF_STEREO_V;
+			config.channel_count = AUDPP_CMD_PCM_INTF_STEREO_V;
 		} else {
 			rc = -EINVAL;
 			break;
@@ -565,19 +458,17 @@ static long audio_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		config.buffer_size = BUFSZ;
 		config.buffer_count = 2;
 		config.sample_rate = audio->out_sample_rate;
-		if (audio->out_channel_mode == AUDPP_CMD_PCM_INTF_MONO_V) {
+		if (audio->out_channel_mode == AUDPP_CMD_PCM_INTF_MONO_V)
 			config.channel_count = 1;
-		} else {
+		else
 			config.channel_count = 2;
-		}
 		config.unused[0] = 0;
 		config.unused[1] = 0;
 		config.unused[2] = 0;
-		if (copy_to_user((void*) arg, &config, sizeof(config))) {
+		if (copy_to_user((void *) arg, &config, sizeof(config)))
 			rc = -EFAULT;
-		} else {
+		else
 			rc = 0;
-		}
 		break;
 	}
 	default:
@@ -587,7 +478,8 @@ static long audio_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	return rc;
 }
 
-static ssize_t audio_read(struct file *file, char __user *buf, size_t count, loff_t *pos)
+static ssize_t audio_read(struct file *file, char __user *buf,
+		size_t count, loff_t *pos)
 {
 	return -EINVAL;
 }
@@ -623,9 +515,11 @@ static ssize_t audio_write(struct file *file, const char __user *buf,
 	/* just for this write, set us real-time */
 	if (!task_has_rt_policy(current)) {
 		struct cred *new = prepare_creds();
-		cap_raise(new->cap_effective, CAP_SYS_NICE);
-		commit_creds(new);
-		sched_setscheduler(current, SCHED_RR, &s);
+		if (new != NULL) {
+		    cap_raise(new->cap_effective, CAP_SYS_NICE);
+		    commit_creds(new);
+		    sched_setscheduler(current, SCHED_RR, &s);
+		}
 	}
 
 	mutex_lock(&audio->write_lock);
@@ -634,7 +528,7 @@ static ssize_t audio_write(struct file *file, const char __user *buf,
 
 		LOG(EV_WAIT_EVENT, 0);
 		rc = wait_event_interruptible(audio->wait,
-					      (frame->used == 0) || (audio->stopped));
+				(frame->used == 0) || (audio->stopped));
 		LOG(EV_WAIT_EVENT, 1);
 
 		if (rc < 0)
@@ -657,9 +551,12 @@ static ssize_t audio_write(struct file *file, const char __user *buf,
 		LOG(EV_FILL_BUFFER, audio->out_head ^ 1);
 		frame = audio->out + audio->out_tail;
 		if (frame->used && audio->out_needed) {
-			audio_dsp_send_buffer(audio, audio->out_tail, frame->used);
-			audio->out_tail ^= 1;
-			audio->out_needed--;
+			rc = audio_dsp_send_buffer(audio,
+					audio->out_tail, frame->used);
+			if (!rc) {
+				audio->out_tail ^= 1;
+				audio->out_needed--;
+			}
 		}
 		spin_unlock_irqrestore(&audio->dsp_lock, flags);
 	}
@@ -672,15 +569,18 @@ static ssize_t audio_write(struct file *file, const char __user *buf,
 		sched_setscheduler(current, old_policy, &v);
 		if (likely(!cap_nice)) {
 			struct cred *new = prepare_creds();
-			cap_lower(new->cap_effective, CAP_SYS_NICE);
-			commit_creds(new);
+			if (new != NULL) {
+			    cap_lower(new->cap_effective, CAP_SYS_NICE);
+			    commit_creds(new);
+			    sched_setscheduler(current, SCHED_RR, &s);
+			}
 		}
 	}
 
-	LOG(EV_RETURN,(buf > start) ? (buf - start) : rc);
+	LOG(EV_RETURN, (buf > start) ? (buf - start) : rc);
 	if (buf > start)
 		return buf - start;
-	return rc;	
+	return rc;
 }
 
 static int audio_release(struct inode *inode, struct file *file)
@@ -693,11 +593,48 @@ static int audio_release(struct inode *inode, struct file *file)
 	audio_flush(audio);
 	audio->opened = 0;
 	mutex_unlock(&audio->lock);
-	htc_pwrsink_set(PWRSINK_AUDIO, 0);
 	return 0;
 }
 
 struct audio the_audio;
+static void audio_audmgr_cb(void)
+{
+	struct audio *audio = &the_audio;
+	struct audmgr *audmgr = &audio->audmgr;
+
+	if (audmgr->state == STATE_DISABLING && audio->enabled) {
+		atomic_set(&audio->image_swap, 1);
+		schedule_work(&audio->work);
+	} else if (audmgr->state == STATE_ENABLED) {
+		if (atomic_read(&audio->image_swap) == 1) {
+			atomic_set(&audio->image_swap, 0);
+			schedule_work(&audio->work);
+		}
+	}
+}
+
+static void audio_work_func(struct work_struct *work)
+{
+	struct audio *audio = &the_audio;
+	struct audmgr *audmgr = &audio->audmgr;
+	int rc;
+
+	if (atomic_read(&audio->image_swap)) {
+		rc = wait_event_interruptible(
+				audio->audpp_wait,
+				atomic_read(&audio->audpp_image_swap_notify));
+		if (rc < 0) {
+			pr_err("%s: can't wait audpp notification\n", __func__);
+			return;
+		}
+		audpp_disable(-1, audio);
+		if (audmgr_disable_event_rsp(audmgr))
+			pr_err("audio: audmgr_disable_event_rsp() failed\n");
+	} else {
+		if (audpp_enable(-1, audio_dsp_event, audpp_modem_event, audio))
+			pr_err("audio: audpp_enable() failed\n");
+	}
+}
 
 static int audio_open(struct inode *inode, struct file *file)
 {
@@ -713,7 +650,7 @@ static int audio_open(struct inode *inode, struct file *file)
 	}
 
 	if (!audio->data) {
-		audio->data = dma_alloc_coherent(NULL, DMASZ, 
+		audio->data = dma_alloc_coherent(NULL, DMASZ,
 						 &audio->phys, GFP_KERNEL);
 		if (!audio->data) {
 			pr_err("audio: could not allocate DMA buffers\n");
@@ -726,6 +663,7 @@ static int audio_open(struct inode *inode, struct file *file)
 	if (rc)
 		goto done;
 
+	audio->audmgr.handle = 0xFFFF;
 	audio->out_buffer_size = BUFSZ;
 	audio->out_sample_rate = 44100;
 	audio->out_channel_mode = AUDPP_CMD_PCM_INTF_STEREO_V;
@@ -734,7 +672,7 @@ static int audio_open(struct inode *inode, struct file *file)
 	audio->out[0].data = audio->data + 0;
 	audio->out[0].addr = audio->phys + 0;
 	audio->out[0].size = BUFSZ;
-	
+
 	audio->out[1].data = audio->data + BUFSZ;
 	audio->out[1].addr = audio->phys + BUFSZ;
 	audio->out[1].size = BUFSZ;
@@ -752,62 +690,6 @@ done:
 	return rc;
 }
 
-static long audpp_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
-{
-	struct audio *audio = file->private_data;
-	int rc = 0, enable;
-	uint16_t enable_mask;
-
-	mutex_lock(&audio->lock);
-	switch (cmd) {
-	case AUDIO_ENABLE_AUDPP:
-		if (copy_from_user(&enable_mask, (void *) arg, sizeof(enable_mask)))
-			goto out_fault;
-
-		enable = (enable_mask & ADRC_ENABLE)? 1 : 0;
-		audio_enable_adrc(audio, enable);
-		enable = (enable_mask & EQ_ENABLE)? 1 : 0;
-		audio_enable_eq(audio, enable);
-		enable = (enable_mask & IIR_ENABLE)? 1 : 0;
-		audio_enable_rx_iir(audio, enable);
-		break;
-
-	case AUDIO_SET_ADRC:
-		if (copy_from_user(&audio->adrc, (void*) arg, sizeof(audio->adrc)))
-			goto out_fault;
-		break;
-
-	case AUDIO_SET_EQ:
-		if (copy_from_user(&audio->eq, (void*) arg, sizeof(audio->eq)))
-			goto out_fault;
-		break;
-
-	case AUDIO_SET_RX_IIR:
-		if (copy_from_user(&audio->iir, (void*) arg, sizeof(audio->iir)))
-			goto out_fault;
-		break;
-
-	default:
-		rc = -EINVAL;
-	}
-
-	goto out;
-
- out_fault:
-	rc = -EFAULT;
- out:
-	mutex_unlock(&audio->lock);
-	return rc;
-}
-
-static int audpp_open(struct inode *inode, struct file *file)
-{
-	struct audio *audio = &the_audio;
-
-	file->private_data = audio;
-	return 0;
-}
-
 static struct file_operations audio_fops = {
 	.owner		= THIS_MODULE,
 	.open		= audio_open,
@@ -817,22 +699,10 @@ static struct file_operations audio_fops = {
 	.unlocked_ioctl	= audio_ioctl,
 };
 
-static struct file_operations audpp_fops = {
-	.owner		= THIS_MODULE,
-	.open		= audpp_open,
-	.unlocked_ioctl	= audpp_ioctl,
-};
-
 struct miscdevice audio_misc = {
 	.minor	= MISC_DYNAMIC_MINOR,
 	.name	= "msm_pcm_out",
 	.fops	= &audio_fops,
-};
-
-struct miscdevice audpp_misc = {
-	.minor	= MISC_DYNAMIC_MINOR,
-	.name	= "msm_pcm_ctl",
-	.fops	= &audpp_fops,
 };
 
 static int __init audio_init(void)
@@ -841,9 +711,11 @@ static int __init audio_init(void)
 	mutex_init(&the_audio.write_lock);
 	spin_lock_init(&the_audio.dsp_lock);
 	init_waitqueue_head(&the_audio.wait);
+	init_waitqueue_head(&the_audio.audpp_wait);
+	INIT_WORK(&the_audio.work, audio_work_func);
 	wake_lock_init(&the_audio.wakelock, WAKE_LOCK_SUSPEND, "audio_pcm");
 	wake_lock_init(&the_audio.idlelock, WAKE_LOCK_IDLE, "audio_pcm_idle");
-	return (misc_register(&audio_misc) || misc_register(&audpp_misc));
+	return misc_register(&audio_misc);
 }
 
 device_initcall(audio_init);

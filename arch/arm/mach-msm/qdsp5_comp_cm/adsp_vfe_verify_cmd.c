@@ -38,8 +38,10 @@ static inline int verify_cmd_op_ack(struct msm_adsp_module *module,
 	return 0;
 }
 
-static inline int verify_cmd_stats_autofocus_cfg(struct msm_adsp_module *module,
-						 void *cmd_data, size_t cmd_size)
+static inline int verify_cmd_stats_autofocus_cfg(
+		struct msm_adsp_module *module,
+		 void *cmd_data,
+		 size_t cmd_size)
 {
 	int i;
 	vfe_cmd_stats_autofocus_cfg *cmd =
@@ -123,7 +125,9 @@ static int verify_vfe_command(struct msm_adsp_module *module,
 		return verify_cmd_stats_wb_exp_ack(module, cmd_data, cmd_size);
 	default:
 		if (cmd_id > 29) {
-			printk(KERN_ERR "adsp: module %s: invalid VFE command id %d\n", module->name, cmd_id);
+			pr_err("adsp: module %s:"
+				" invalid VFE command id %d\n",
+				module->name, cmd_id);
 			return -1;
 		}
 	}
@@ -136,7 +140,9 @@ static int verify_vfe_command_scale(struct msm_adsp_module *module,
 	uint32_t cmd_id = ((uint32_t *)cmd_data)[0];
 	/* FIXME: check the size*/
 	if (cmd_id > 1) {
-		printk(KERN_ERR "adsp: module %s: invalid VFE SCALE command id %d\n", module->name, cmd_id);
+		pr_err("adsp: module %s: "
+			"invalid VFE SCALE command id %d\n",
+			module->name, cmd_id);
 		return -1;
 	}
 	return 0;
@@ -166,7 +172,9 @@ static int verify_vfe_command_table(struct msm_adsp_module *module,
 		vfe_cmd_axi_ip_cfg *cmd = (vfe_cmd_axi_ip_cfg *)cmd_data;
 		uint32_t size;
 		if (cmd_size != sizeof(vfe_cmd_axi_ip_cfg)) {
-			printk(KERN_ERR "adsp: module %s: invalid VFE TABLE (VFE_CMD_AXI_IP_CFG) command size %d\n",
+			pr_err("adsp: module %s: "
+				"invalid VFE TABLE (VFE_CMD_AXI_IP_CFG)"
+				" command size %d\n",
 				module->name, cmd_size);
 			return -1;
 		}
@@ -184,8 +192,10 @@ static int verify_vfe_command_table(struct msm_adsp_module *module,
 		vfe_cmd_axi_op_cfg *cmd = (vfe_cmd_axi_op_cfg *)cmd_data;
 		void **addr1_y, **addr2_y, **addr1_cbcr, **addr2_cbcr;
 
-		if (cmd_size != sizeof(vfe_cmd_axi_op_cfg)) { 
-			printk(KERN_ERR "adsp: module %s: invalid VFE TABLE (VFE_CMD_AXI_OP_CFG) command size %d\n",
+		if (cmd_size != sizeof(vfe_cmd_axi_op_cfg)) {
+			pr_err("adsp: module %s: "
+				"invalid VFE TABLE (VFE_CMD_AXI_OP_CFG)"
+				" command size %d\n",
 				module->name, cmd_size);
 			return -1;
 		}
@@ -203,16 +213,21 @@ static int verify_vfe_command_table(struct msm_adsp_module *module,
 				module->name, i,
 				*addr1_y, *addr1_cbcr, *addr2_y, *addr2_cbcr);
 */
-			if ((*addr1_y && adsp_pmem_fixup(module, addr1_y, size1_y)) ||
-			    (*addr1_cbcr && adsp_pmem_fixup(module, addr1_cbcr, size1_cbcr)) ||
-			    (*addr2_y && adsp_pmem_fixup(module, addr2_y, size2_y)) ||
-			    (*addr2_cbcr && adsp_pmem_fixup(module, addr2_cbcr, size2_cbcr)))
+			if ((*addr1_y && adsp_pmem_fixup(module,
+					addr1_y, size1_y)) ||
+				(*addr1_cbcr && adsp_pmem_fixup(module,
+					addr1_cbcr, size1_cbcr)) ||
+				(*addr2_y && adsp_pmem_fixup(module,
+					addr2_y, size2_y)) ||
+				(*addr2_cbcr && adsp_pmem_fixup(module,
+					addr2_cbcr, size2_cbcr)))
 				return -1;
 		}
 	}
 	default:
 		if (cmd_id > 4) {
-			printk(KERN_ERR "adsp: module %s: invalid VFE TABLE command id %d\n",
+			pr_err("adsp: module %s:"
+				" invalid VFE TABLE command id %d\n",
 				module->name, cmd_id);
 			return -1;
 		}

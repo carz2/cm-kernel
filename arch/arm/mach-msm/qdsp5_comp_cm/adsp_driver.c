@@ -142,7 +142,8 @@ static int adsp_pmem_add(struct msm_adsp_module *module,
 	region->kvaddr = kvaddr;
 	region->len = len;
 	region->file = file;
-
+	pr_info("adsp_pmem_add module %s vaddr:0x%x paddr:0x%x len:%d\n",
+		module->name, region->vaddr, region->paddr, region->len);
 	hlist_add_head(&region->list, &module->pmem_regions);
 end:
 	mutex_unlock(&module->pmem_regions_lock);
@@ -161,6 +162,12 @@ static int adsp_pmem_del(struct msm_adsp_module *module)
 		hlist_del(node);
 		put_pmem_file(region->file);
 
+		pr_info("%s name %s vaddr:0x%x paddr:0x%x len:%d\n",
+			__func__,
+			module->name,
+			region->vaddr,
+			region->paddr,
+			region->len);
 		kfree(region);
 	}
 	mutex_unlock(&module->pmem_regions_lock);
@@ -447,7 +454,7 @@ static long adsp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		return msm_adsp_disable(adev->module);
 
 	case ADSP_IOCTL_DISABLE_EVENT_RSP:
-		return 0;
+		return msm_adsp_disable_event_rsp(adev->module);
 
 	case ADSP_IOCTL_DISABLE_ACK:
 		pr_err("adsp: ADSP_IOCTL_DISABLE_ACK is not implemented.\n");
@@ -494,6 +501,11 @@ static int adsp_release(struct inode *inode, struct file *filp)
 	rc = adsp_pmem_del(module);
 
 	msm_adsp_put(module);
+	if (strcmp(adev->name, "VIDEOENCTASK") == 0) {
+		pr_info("VIDEOENCTASK is closed, unset PWRSINK_VIDEO\n");
+		/* video recording end */
+		htc_pwrsink_set(PWRSINK_VIDEO, 0);
+	}
 	return rc;
 }
 
@@ -560,6 +572,12 @@ static int adsp_open(struct inode *inode, struct file *filp)
 		return rc;
 
 	pr_info("adsp_open() module '%s' adev %p\n", adev->name, adev);
+	if (strcmp(adev->name, "VIDEOENCTASK") == 0) {
+		pr_info("VIDEOENCTASK is opened, set PWRSINK_VIDEO\n");
+		/* video recording start */
+		htc_pwrsink_set(PWRSINK_VIDEO, 100);
+	}
+
 	filp->private_data = adev;
 	adev->abort = 0;
 	INIT_HLIST_HEAD(&adev->module->pmem_regions);

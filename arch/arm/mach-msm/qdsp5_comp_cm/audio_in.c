@@ -539,7 +539,7 @@ static int audio_in_encoder_config(struct audio_in *audio)
 		audio->in[n].data = data + 4;
 		if (audio->type == AUDREC_CMD_TYPE_0_INDEX_WAV)
 			data += (4 + (audio->channel_mode ? 2048 : 1024));
-		else if (audio->type == AUDREC_CMD_TYPE_0_INDEX_AAC)
+		else
 			data += (4 + 768);
 	}
 
@@ -751,8 +751,6 @@ static ssize_t audio_in_read(struct file *file,
 			pr_err("audio_in: short read\n");
 			break;
 		}
-		if (audio->type == AUDREC_CMD_TYPE_0_INDEX_AAC)
-			break; /* AAC only read one frame */
 	}
 	mutex_unlock(&audio->read_lock);
 
@@ -818,6 +816,7 @@ static int audio_in_open(struct inode *inode, struct file *file)
 	if (rc)
 		goto done;
 
+	audio->audmgr.handle = 0xFFFF;
 	audio->dsp_cnt = 0;
 	audio->stopped = 0;
 
@@ -941,7 +940,6 @@ struct miscdevice audpre_misc = {
 
 static int __init audio_in_init(void)
 {
-	int rc;
 	the_audio_in.data = dma_alloc_coherent(NULL, DMASZ,
 						&the_audio_in.phys, GFP_KERNEL);
 	if (!the_audio_in.data) {
@@ -954,13 +952,7 @@ static int __init audio_in_init(void)
 	mutex_init(&the_audio_in.read_lock);
 	spin_lock_init(&the_audio_in.dsp_lock);
 	init_waitqueue_head(&the_audio_in.wait);
-	rc = misc_register(&audio_in_misc);
-	if (!rc) {
-		rc = misc_register(&audpre_misc);
-		if (rc < 0)
-			misc_deregister(&audio_in_misc);
-	}
-	return rc;
+	return (misc_register(&audio_in_misc) || misc_register(&audpre_misc));
 }
 
 device_initcall(audio_in_init);

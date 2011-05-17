@@ -89,37 +89,53 @@ static int verify_venc_cmd(struct msm_adsp_module *module,
 	DLOG("cmd_size %d cmd_id %d cmd_data %x\n", cmd_size, cmd_id, cmd_data);
 	switch (cmd_id) {
 	case VIDENC_CMD_ACTIVE:
-		if (cmd_size < sizeof(videnc_cmd_active))
+		if (cmd_size < sizeof(videnc_cmd_active)) {
+		printk(KERN_ERR "%s, error %d\n", __func__, cmd_id);
 			return -1;
+		}
 		break;
 	case VIDENC_CMD_IDLE:
-		if (cmd_size < sizeof(videnc_cmd_idle))
+		if (cmd_size < sizeof(videnc_cmd_idle)) {
+                printk(KERN_ERR "%s, error %d\n", __func__, cmd_id);
 			return -1;
+		}
 		x_dimension = y_dimension = 0;
 		break;
 	case VIDENC_CMD_STATUS_QUERY:
-		if (cmd_size < sizeof(videnc_cmd_status_query))
+		if (cmd_size < sizeof(videnc_cmd_status_query)) {
+                printk(KERN_ERR "%s, error: %d\n", __func__, cmd_id);
 			return -1;
+		}
 		break;
 	case VIDENC_CMD_RC_CFG:
-		if (cmd_size < sizeof(videnc_cmd_rc_cfg))
+		if (cmd_size < sizeof(videnc_cmd_rc_cfg)) {
+                printk(KERN_ERR "%s, error: %d\n", __func__, cmd_id);
 			return -1;
+		}
 		break;
 	case VIDENC_CMD_INTRA_REFRESH:
-		if (cmd_size < sizeof(videnc_cmd_intra_refresh))
+		if (cmd_size < sizeof(videnc_cmd_intra_refresh)) {
+                printk(KERN_ERR "%s, error: %d\n", __func__, cmd_id);
 			return -1;
+		}
 		break;
 	case VIDENC_CMD_DIGITAL_ZOOM:
-		if (cmd_size < sizeof(videnc_cmd_digital_zoom))
+		if (cmd_size < sizeof(videnc_cmd_digital_zoom)) {
+                printk(KERN_ERR "%s, error: %d\n", __func__, cmd_id);
 			return -1;
+		}
 		break;
 	case VIDENC_CMD_DIS_CFG:
-		if (cmd_size < sizeof(videnc_cmd_dis_cfg))
+		if (cmd_size < sizeof(videnc_cmd_dis_cfg)) {
+                printk(KERN_ERR "%s, error: %d\n", __func__, cmd_id);
 			return -1;
+		}
 		break;
 	case VIDENC_CMD_CFG:
-		if (cmd_size < sizeof(videnc_cmd_cfg))
+		if (cmd_size < sizeof(videnc_cmd_cfg)) {
+                printk(KERN_ERR "%s, error: %d\n", __func__, cmd_id);
 			return -1;
+		}
 		config_cmd = (videnc_cmd_cfg *)cmd_data;
 		x_dimension = ((config_cmd->venc_frame_dim) & 0xFF00)>>8;
 		x_dimension = x_dimension*16;
@@ -127,8 +143,10 @@ static int verify_venc_cmd(struct msm_adsp_module *module,
 		y_dimension = y_dimension * 16;
 		break;
 	case VIDENC_CMD_FRAME_START:
-		if (cmd_size < sizeof(videnc_cmd_frame_start))
+		if (cmd_size < sizeof(videnc_cmd_frame_start)) {
+                printk(KERN_ERR "%s, error: %d\n", __func__, cmd_id);
 			return -1;
+		}
 		frame_cmd = (videnc_cmd_frame_start *)cmd_data;
 		luma_buf_size = x_dimension * y_dimension;
 		chroma_buf_size = luma_buf_size>>1;
@@ -148,32 +166,40 @@ static int verify_venc_cmd(struct msm_adsp_module *module,
 					luma_buf_size_high,
 					luma_buf_size_low,
 					module,
-					NULL, NULL))
+					NULL, NULL)) {
+                printk(KERN_ERR "%s, : %d, pmem_fixup_high_low, line=%d\n", __func__, cmd_id, __LINE__);
 			return -1;
+		}
 		/* Address of raw CbCr data */
 		if (pmem_fixup_high_low(&frame_cmd->input_chroma_addr_high,
 					&frame_cmd->input_chroma_addr_low,
 					chroma_buf_size_high,
 					chroma_buf_size_low,
 					module,
-					NULL, NULL))
-			return -1;
+					NULL, NULL)) {
+                printk(KERN_ERR "%s, : %d, pmem_fixup_high_low, line=%d\n", __func__, cmd_id, __LINE__);
+                        return -1;
+                }
 		/* Reference VOP */
 		if (pmem_fixup_high_low(&frame_cmd->ref_vop_buf_ptr_high,
 					&frame_cmd->ref_vop_buf_ptr_low,
 					frame_buf_size_high,
 					frame_buf_size_low,
 					module,
-					NULL, NULL))
-			return -1;
+					NULL, NULL)) {
+                printk(KERN_ERR "%s, : %d, pmem_fixup_high_low, line=%d\n", __func__, cmd_id, __LINE__);
+                        return -1;
+                }
 		/* Encoded Packet Address */
 		if (pmem_fixup_high_low(&frame_cmd->enc_pkt_buf_ptr_high,
 					&frame_cmd->enc_pkt_buf_ptr_low,
 					frame_cmd->enc_pkt_buf_size_high,
 					frame_cmd->enc_pkt_buf_size_low,
 					module,
-					NULL, NULL))
-			return -1;
+					NULL, NULL)) {
+                printk(KERN_ERR "%s, : %d, pmem_fixup_high_low, line=%d\n", __func__, cmd_id, __LINE__);
+                        return -1;
+                }
 		/* Unfiltered VOP Buffer Address */
 		if (pmem_fixup_high_low(
 				&frame_cmd->unfilt_recon_vop_buf_ptr_high,
@@ -181,16 +207,20 @@ static int verify_venc_cmd(struct msm_adsp_module *module,
 				frame_buf_size_high,
 				frame_buf_size_low,
 				module,
-				NULL, NULL))
-			return -1;
+				NULL, NULL)) {
+                printk(KERN_ERR "%s, : %d, pmem_fixup_high_low, line=%d\n", __func__, cmd_id, __LINE__);
+                        return -1;
+                }
 		/* Filtered VOP Buffer Address */
 		if (pmem_fixup_high_low(&frame_cmd->filt_recon_vop_buf_ptr_high,
 					&frame_cmd->filt_recon_vop_buf_ptr_low,
 					frame_buf_size_high,
 					frame_buf_size_low,
 					module,
-					NULL, NULL))
-			return -1;
+					NULL, NULL)) {
+                printk(KERN_ERR "%s, : %d, pmem_fixup_high_low, line=%d\n", __func__, cmd_id, __LINE__);
+                        return -1;
+                }
 		break;
 	case VIDENC_CMD_DIS:
 		if (cmd_size < sizeof(videnc_cmd_dis))
@@ -206,8 +236,10 @@ static int verify_venc_cmd(struct msm_adsp_module *module,
 					luma_buf_size_high,
 					luma_buf_size_low,
 					module,
-					NULL, NULL))
-			return -1;
+					NULL, NULL)) {
+                printk(KERN_ERR "%s, : %d, pmem_fixup_high_low, line=%d\n", __func__, cmd_id, __LINE__);
+                        return -1;
+                }
 		break;
 	default:
 		printk(KERN_INFO "adsp_video:unknown encoder video command %u\n",

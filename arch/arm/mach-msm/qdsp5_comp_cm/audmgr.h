@@ -14,12 +14,11 @@
  *
  */
 
-#ifndef _ARCH_ARM_MACH_MSM_AUDMGR_H
-#define _ARCH_ARM_MACH_MSM_AUDMGR_H
+#ifndef _AUDIO_RPC_H_
+#define _AUDIO_RPC_H_
 
-#if CONFIG_MSM_AMSS_VERSION==6350
-#include "audmgr_new.h"
-#else
+#include <mach/msm_rpc_version.h>
+#include <mach/qdsp5/qdsp5audppcmdi.h>
 
 enum rpc_aud_def_sample_rate_type {
 	RPC_AUD_DEF_SAMPLE_RATE_NONE,
@@ -90,8 +89,14 @@ enum rpc_voc_codec_type {
 	RPC_VOC_CODEC_ON_CHIP_1,
 	RPC_VOC_CODEC_STEREO_HEADSET,
 	RPC_VOC_CODEC_ON_CHIP_AUX,
+	RPC_VOC_CODEC_SPEAKER,
+	RPC_VOC_CODEC_BT_INTERCOM,
 	RPC_VOC_CODEC_BT_OFF_BOARD,
+	RPC_VOC_CODEC_BT_AG_LOCAL_AUDIO,
 	RPC_VOC_CODEC_BT_A2DP,
+	RPC_VOC_CODEC_BT_A2DP_SCO,
+	RPC_VOC_CODEC_A2DP_TX_I2S,
+	RPC_VOC_CODEC_A2DP_TX_I2S_RX_LINEOUT,
 	RPC_VOC_CODEC_OFF_BOARD,
 	RPC_VOC_CODEC_SDAC,
 	RPC_VOC_CODEC_RX_EXT_SDAC_TX_INTERNAL,
@@ -104,6 +109,8 @@ enum rpc_voc_codec_type {
 	RPC_VOC_CODEC_TTY_OFF_BOARD,
 	RPC_VOC_CODEC_TTY_VCO,
 	RPC_VOC_CODEC_TTY_HCO,
+	RPC_VOC_CODEC_USB,
+	RPC_VOC_CODEC_STEREO_USB,
 	RPC_VOC_CODEC_ON_CHIP_0_DUAL_MIC,
 	RPC_VOC_CODEC_MAX,
 	RPC_VOC_CODEC_NONE,
@@ -131,7 +138,7 @@ struct rpc_audmgr_enable_client_args {
 	uint32_t cb_func;
 	uint32_t client_data;
 };
-	
+
 #define AUDMGR_ENABLE_CLIENT			2
 #define AUDMGR_DISABLE_CLIENT			3
 #define AUDMGR_SUSPEND_EVENT_RSP		4
@@ -142,15 +149,15 @@ struct rpc_audmgr_enable_client_args {
 #define AUDMGR_GET_TX_SAMPLE_RATE		9
 #define AUDMGR_SET_DEVICE_MODE			10
 
-#if CONFIG_MSM_AMSS_VERSION < 6220
-#define AUDMGR_PROG_VERS "rs30000013:46255756"
+#define STATE_CLOSED    0
+#define STATE_DISABLED  1
+#define STATE_ENABLING  2
+#define STATE_ENABLED   3
+#define STATE_DISABLING 4
+#define STATE_KILLED    5
+
 #define AUDMGR_PROG 0x30000013
-#define AUDMGR_VERS 0x46255756
-#else
-#define AUDMGR_PROG_VERS "rs30000013:10002"
-#define AUDMGR_PROG 0x30000013
-#define AUDMGR_VERS 0x10002
-#endif
+#define AUDMGR_CB_PROG 0x31000013
 
 struct rpc_audmgr_cb_func_ptr {
 	uint32_t cb_id;
@@ -174,13 +181,9 @@ struct rpc_audmgr_cb_func_ptr {
 #define AUDMGR_OPR_LSTNR_CB_FUNC_PTR		2
 #define AUDMGR_CODEC_LSTR_FUNC_PTR		3
 
-#if CONFIG_MSM_AMSS_VERSION < 6220
-#define AUDMGR_CB_PROG 0x31000013
-#define AUDMGR_CB_VERS 0x5fa922a9
-#else
-#define AUDMGR_CB_PROG 0x31000013
-#define AUDMGR_CB_VERS 0x10002
-#endif
+typedef void (*audpp_event_func)(void *private, unsigned id, uint16_t *msg);
+typedef void (*audpp_modem_event_func) (void *private, unsigned image_swap);
+typedef void (*audmgr_event_func)(void);
 
 struct audmgr {
 	wait_queue_head_t wait;
@@ -188,6 +191,7 @@ struct audmgr {
 	struct msm_rpc_endpoint *ept;
 	struct task_struct *task;
 	int state;
+	audmgr_event_func cb;
 };
 
 struct audmgr_config {
@@ -202,21 +206,20 @@ int audmgr_open(struct audmgr *am);
 int audmgr_close(struct audmgr *am);
 int audmgr_enable(struct audmgr *am, struct audmgr_config *cfg);
 int audmgr_disable(struct audmgr *am);
+int audmgr_disable_event_rsp(struct audmgr *am);
 
-typedef void (*audpp_event_func)(void *private, unsigned id, uint16_t *msg);
-
-int audpp_enable(int id, audpp_event_func func, void *private);
+int audpp_enable(int id, audpp_event_func func,
+		audpp_modem_event_func mfunc, void *private);
 void audpp_disable(int id, void *private);
+int audpp_dec_ctrl(audpp_cmd_dec_ctrl *cmd);
 
 int audpp_send_queue1(void *cmd, unsigned len);
 int audpp_send_queue2(void *cmd, unsigned len);
 int audpp_send_queue3(void *cmd, unsigned len);
 
-int audpp_pause(unsigned id, int pause);
 int audpp_set_volume_and_pan(unsigned id, unsigned volume, int pan);
 void audpp_avsync(int id, unsigned rate);
 unsigned audpp_avsync_sample_count(int id);
 unsigned audpp_avsync_byte_count(int id);
 
-#endif
 #endif
