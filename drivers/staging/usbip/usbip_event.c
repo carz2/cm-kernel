@@ -38,13 +38,7 @@ static int event_handler(struct usbip_device *ud)
 			ud->eh_ops.shutdown(ud);
 
 			ud->event &= ~USBIP_EH_SHUTDOWN;
-
-			break;
 		}
-
-		/* Stop the error handler. */
-		if (ud->event & USBIP_EH_BYE)
-			return -1;
 
 		/* Reset the device. */
 		if (ud->event & USBIP_EH_RESET) {
@@ -60,13 +54,11 @@ static int event_handler(struct usbip_device *ud)
 			ud->eh_ops.unusable(ud);
 
 			ud->event &= ~USBIP_EH_UNUSABLE;
-
-			break;
 		}
 
-		/* NOTREACHED */
-		printk(KERN_ERR "%s: unknown event\n", __func__);
-		return -1;
+   /* Stop the error handler. */
+   if (ud->event & USBIP_EH_BYE)
+	return -1;
 	}
 
 	return 0;
