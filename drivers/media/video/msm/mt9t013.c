@@ -35,7 +35,7 @@
 #define MT9T013_REG_MODEL_ID 		 0x0000
 #define MT9T013_MODEL_ID     		 0x2600
 #define REG_GROUPED_PARAMETER_HOLD   0x0104
-#define GROUPED_PARAMETER_HOLD       0x0100
+#define GROUPED_PARAMETER_HOLD       0x0001 //0x0100 20091208 gordon modify parameter hold value.
 #define GROUPED_PARAMETER_UPDATE     0x0000
 #define REG_COARSE_INT_TIME          0x3012
 #define REG_VT_PIX_CLK_DIV           0x0300
