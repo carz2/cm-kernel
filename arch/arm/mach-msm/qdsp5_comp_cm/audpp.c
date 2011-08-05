@@ -62,7 +62,7 @@ static int __init _dsp_log_init(void)
 	return ev_log_init(&dsp_log);
 }
 module_init(_dsp_log_init);
-#define LOG(id,arg) ev_log_write(&dsp_log, id, arg)
+#define LOG(id, arg) ev_log_write(&dsp_log, id, arg)
 
 static DEFINE_MUTEX(audpp_lock);
 
@@ -317,6 +317,11 @@ static void audpp_dsp_event(void *data, unsigned id, size_t len,
 		} else
 			pr_err("audpp: invalid config msg %d\n", msg[0]);
 		break;
+	case ADSP_MESSAGE_ID:
+		pr_info("audpp: module enabled\n");
+		break;
+	default:
+		pr_info("audpp: unhandled msg id %x\n", id);
 	}
 }
 
@@ -472,7 +477,7 @@ unsigned audpp_avsync_sample_count(int id)
 
 	if (BAD_ID(id))
 		return 0;
-	
+
 	mask = 1 << id;
 	id = id * 6 + 2;
 	local_irq_save(flags);

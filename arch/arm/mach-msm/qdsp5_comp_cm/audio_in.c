@@ -248,7 +248,8 @@ static int audio_in_disable(struct audio_in *audio)
 static void audpre_dsp_event(void *data, unsigned id, size_t len,
 			    void (*getevent)(void *ptr, size_t len))
 {
-	uint16_t msg[6]; /* may be a 32-bit event, which we ignore */
+	uint16_t msg[2];
+	pr_info("%s %d\n", __func__, id);
 	getevent(msg, sizeof(msg));
 
 	switch (id) {
@@ -257,6 +258,9 @@ static void audpre_dsp_event(void *data, unsigned id, size_t len,
 		break;
 	case AUDPREPROC_MSG_ERROR_MSG_ID:
 		pr_info("audpre: err_index %d\n", msg[0]);
+		break;
+	case ADSP_MESSAGE_ID:
+		pr_info("audpre: module enabled\n");
 		break;
 	default:
 		pr_err("audpre: unknown event %d\n", id);
@@ -305,7 +309,7 @@ static void audrec_dsp_event(void *data, unsigned id, size_t len,
 			    void (*getevent)(void *ptr, size_t len))
 {
 	struct audio_in *audio = data;
-	uint16_t msg[6]; /* may be a 32-bit event, which we ignore */
+	uint16_t msg[3];
 	getevent(msg, sizeof(msg));
 
 	switch (id) {
@@ -334,8 +338,12 @@ static void audrec_dsp_event(void *data, unsigned id, size_t len,
 		pr_err("audrec: ERROR %x\n", msg[0]);
 		break;
 	case AUDREC_MSG_PACKET_READY_MSG:
-/* REC_DBG("type %x, count %d", msg[0], (msg[1] | (msg[2] << 16))); */
+		/*REC_DBG("type %x, count %d",
+		msg[0], (msg[1] | (msg[2] << 16)));*/
 		audio_in_get_dsp_frames(audio);
+		break;
+	case ADSP_MESSAGE_ID:
+		pr_info("audrec: module enabled\n");
 		break;
 	default:
 		pr_err("audrec: unknown event %d\n", id);
@@ -351,13 +359,12 @@ struct msm_adsp_ops audrec_adsp_ops = {
 };
 
 
-#define audio_send_queue_pre(audio, cmd, len) \
+#define audio_send_queue_pre(audio, cmd,len) \
 	msm_adsp_write(audio->audpre, QDSP_uPAudPreProcCmdQueue, cmd, len)
-#define audio_send_queue_recbs(audio, cmd, len) \
+#define audio_send_queue_recbs(audio, cmd,len) \
 	msm_adsp_write(audio->audrec, QDSP_uPAudRecBitStreamQueue, cmd, len)
-#define audio_send_queue_rec(audio, cmd, len) \
-	msm_adsp_write(audio->audrec, \
-	QDSP_uPAudRecCmdQueue, cmd, len)
+#define audio_send_queue_rec(audio, cmd,len) \
+	msm_adsp_write(audio->audrec, QDSP_uPAudRecCmdQueue, cmd, len)
 
 static int audio_dsp_set_agc(struct audio_in *audio)
 {
