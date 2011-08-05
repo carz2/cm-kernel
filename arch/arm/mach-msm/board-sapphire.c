@@ -1366,12 +1366,7 @@ static void __init sapphire_fixup(struct machine_desc *desc, struct tag *tags,
 			mi->bank[1].node = PHYS_TO_NID(0x18000000);
 			break;
 		default:
-			mi->nr_banks = 2;
 			mi->bank[0].size = MSM_EBI_SMI32_256MB_SIZE;
-
-			mi->bank[1].start = 0x27000000;
-			mi->bank[1].size = 0xa00000;
-			mi->bank[1].node = PHYS_TO_NID(0x27000000);
 			break;
 		}
 	} else if (smi_sz == 64) {
