@@ -82,7 +82,6 @@ struct msm_sensor_ctrl {
 	int (*s_init)(struct msm_camera_sensor_info *);
 	int (*s_release)(void);
 	int (*s_config)(void __user *);
-	int node;
 };
 
 /* this structure is used in kernel */
