@@ -1,0 +1,48 @@
+#!/bin/bash
+
+export KERNEL_DIR=$PWD
+
+cd $KERNEL_DIR
+if [ ! -d output ]; then
+	mkdir output;
+fi
+
+if [ ! -d output/modules ]; then
+	mkdir output/modules;
+fi
+
+if [ ! -d output/modules/2.6.34.4-cyanogenmod ]; then
+	mkdir output/modules/2.6.34.4-cyanogenmod;
+fi
+
+if [ ! -d output/modules/2.6.34.4-cyanogenmod/kernel ]; then
+	mkdir output/modules/2.6.34.4-cyanogenmod/kernel;
+fi
+
+cp -f $KERNEL_DIR/arch/arm/boot/zImage $KERNEL_DIR/output/ > /dev/null
+
+find $KERNEL_DIR -name wlan.ko -exec cp -f '{}' $KERNEL_DIR/output/modules/ \; > /dev/null
+
+find $KERNEL_DIR -name wlan.ko -exec cp -f '{}' $KERNEL_DIR/output/modules/2.6.34.4-cyanogenmod/kernel/drivers/net/wireless/tiwlan1251/ \; > /dev/null
+
+find $KERNEL_DIR -name ramzswap.ko -exec cp -f '{}' $KERNEL_DIR/output/modules/2.6.34.4-cyanogenmod/kernel/drivers/staging/ramzswap/ \; > /dev/null
+
+find $KERNEL_DIR -name cifs.ko -exec cp -f '{}' $KERNEL_DIR/output/modules/2.6.34.4-cyanogenmod/kernel/fs/cifs/ \; > /dev/null
+
+find $KERNEL_DIR -name fuse.ko -exec cp -f '{}' $KERNEL_DIR/output/modules/2.6.34.4-cyanogenmod/kernel/fs/fuse/ \; > /dev/null
+
+find $KERNEL_DIR -name lockd.ko -exec cp -f '{}' $KERNEL_DIR/output/modules/2.6.34.4-cyanogenmod/kernel/fs/lockd/ \; > /dev/null
+
+find $KERNEL_DIR -name nfs.ko -exec cp -f '{}' $KERNEL_DIR/output/modules/2.6.34.4-cyanogenmod/kernel/fs/nfs/ \; > /dev/null
+
+find $KERNEL_DIR -name nfs_acl.ko -exec cp -f '{}' $KERNEL_DIR/output/modules/2.6.34.4-cyanogenmod/kernel/fs/nfs_common/ \; > /dev/null
+
+find $KERNEL_DIR -name mip6.ko -exec cp -f '{}' $KERNEL_DIR/output/modules/2.6.34.4-cyanogenmod/kernel/net/ipv6/ \; > /dev/null
+
+find $KERNEL_DIR -name auth_rpcgss.ko -exec cp -f '{}' $KERNEL_DIR/output/modules/2.6.34.4-cyanogenmod/kernel/net/sunrpc/auth_gss/ \; > /dev/null
+
+find $KERNEL_DIR -name rpcsec_gss_krb5.ko -exec cp -f '{}' $KERNEL_DIR/output/modules/2.6.34.4-cyanogenmod/kernel/net/sunrpc/auth_gss/ \; > /dev/null
+
+find $KERNEL_DIR -name sunrpc.ko -exec cp -f '{}' $KERNEL_DIR/output/modules/2.6.34.4-cyanogenmod/kernel/net/sunrpc/ \; > /dev/null
+
+exit #
