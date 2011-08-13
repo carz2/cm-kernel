@@ -32,10 +32,31 @@
 #include <linux/msm_rpcrouter.h>
 #include <linux/uaccess.h>
 
+#include <mach/msm_iomap.h>
+#include <asm/io.h>
+
 #include <mach/msm_rpcrouter.h>
 #include "smd_rpcrouter.h"
 
 static struct msm_rpc_endpoint *endpoint;
+
+typedef enum {
+  RPC_SERVER_UNLOCK	= 0, /* init value, wake_unlock() */
+  RPC_SERVER_INT	= 1, /* wait_event_interruptible(), wake_lock() */
+  RPC_SERVER_READ	= 2, /* msm_rpc_read() */
+  RPC_SERVER_FIND	= 3, /* rpc_server_find() */
+  RPC_SERVER_CALL	= 4, /* server rpc_call() */
+  RPC_SERVER_REPLY	= 5, /* rpc_send_accepted_void_reply() */
+  RPC_SERVER_MAX,
+} rpc_server_states;
+
+#ifdef CONFIG_SMEM_RPC_SERVER_STATE
+/* The RPC server state in SMEM addr (0x000F87F0) */
+#define SMEM_RPC_SERVER_ADDR			(MSM_SHARED_RAM_BASE + 0x000F8000 + 0x000007F8 - 0x08)
+#define rpc_server_set_state(state)		writel(state, SMEM_RPC_SERVER_ADDR)
+#else
+#define rpc_server_set_state(state)		do {} while (0)
+#endif
 
 #define FLAG_REGISTERED 0x0001
 
@@ -137,10 +158,13 @@ static int rpc_servers_thread(void *data)
 
 	for (;;) {
 		wake_unlock(&rpc_servers_wake_lock);
+		rpc_server_set_state(RPC_SERVER_UNLOCK);
 		rc = wait_event_interruptible(endpoint->wait_q,
 						!list_empty(&endpoint->read_q));
 		wake_lock(&rpc_servers_wake_lock);
+		rpc_server_set_state(RPC_SERVER_INT);
 		rc = msm_rpc_read(endpoint, &buffer, -1, -1);
+		rpc_server_set_state(RPC_SERVER_READ);
 		if (rc < 0) {
 			printk(KERN_ERR "%s: could not read: %d\n",
 			       __FUNCTION__, rc);
@@ -156,6 +180,7 @@ static int rpc_servers_thread(void *data)
 		req->procedure = be32_to_cpu(req->procedure);
 
 		server = rpc_server_find(req->prog, req->vers);
+		rpc_server_set_state(RPC_SERVER_FIND);
 
 		if (req->rpc_vers != 2)
 			continue;
@@ -169,12 +194,14 @@ static int rpc_servers_thread(void *data)
 		}
 
 		rc = server->rpc_call(server, req, rc);
+		rpc_server_set_state(RPC_SERVER_REPLY);
 
 		switch (rc) {
 		case 0:
 			rpc_send_accepted_void_reply(
 				endpoint, req->xid,
 				RPC_ACCEPTSTAT_SUCCESS);
+			rpc_server_set_state(RPC_SERVER_CALL);
 			break;
 		default:
 			rpc_send_accepted_void_reply(
