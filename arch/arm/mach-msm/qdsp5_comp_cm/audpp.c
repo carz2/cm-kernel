@@ -200,7 +200,7 @@ static int audpp_dsp_set_adrc(void)
 	return audpp_send_queue3(&cmd, sizeof(cmd));
 }
 
-static int audpp_dsp_set_eq()
+static int audpp_dsp_set_eq(void)
 {
 	struct audpp_state *audpp = &the_audpp_state;
 	struct audpp_cmd_cfg_object_params_eq cmd;
@@ -220,7 +220,7 @@ static int audpp_dsp_set_eq()
 	return audpp_send_queue3(&cmd, sizeof(cmd));
 }
 
-static int audpp_dsp_set_rx_iir()
+static int audpp_dsp_set_rx_iir(void)
 {
 	struct audpp_state *audpp = &the_audpp_state;
 	struct audpp_cmd_cfg_object_params_rx_iir cmd;
