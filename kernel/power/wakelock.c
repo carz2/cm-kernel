@@ -67,9 +67,9 @@ int get_expired_time(struct wake_lock *lock, ktime_t *expire_time)
 		return 0;
 	do {
 		seq = read_seqbegin(&xtime_lock);
-		timeout = lock->expires - jiffies;
+	timeout = lock->expires - jiffies;
 		if (timeout > 0)
-			return 0;
+		return 0;
 		kt = current_kernel_time();
 		tomono = wall_to_monotonic;
 	} while (read_seqretry(&xtime_lock, seq));
@@ -222,7 +222,7 @@ static void print_active_locks(int type)
 				pr_info("wake lock %s, expired\n", lock->name);
 		} else {
 			pr_info("active wake lock %s\n", lock->name);
-			if (!debug_mask & DEBUG_EXPIRE)
+			if (!(debug_mask & DEBUG_EXPIRE))
 				print_expired = false;
 		}
 	}
