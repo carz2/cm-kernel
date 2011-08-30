@@ -84,7 +84,7 @@ static void process_rpc_request(uint32_t proc, uint32_t xid,
 	}
 }
 
-static int snd_rpc_thread(void *d)
+static int snd_rpc_thread(void)
 {
 	struct rpc_request_hdr *hdr = NULL;
 	uint32_t type;
