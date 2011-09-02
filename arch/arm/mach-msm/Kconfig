@@ -191,6 +191,12 @@ config HTC_PWRSINK
 	default y
 	bool "HTC Power Sink Driver"
 
+config HTC_SLEEP_MODE_GPIO_DUMP
+	default y
+	bool "HTC Sleep Mode GPIO Dump"
+	help
+	   Support for dumping GPIO status when enter suspend.
+
 config CACHE_FLUSH_RANGE_LIMIT
 	hex "Cache flush range limit"
 	default 0x40000

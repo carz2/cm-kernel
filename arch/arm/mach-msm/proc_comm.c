@@ -23,6 +23,10 @@
 
 #include "proc_comm.h"
 
+#ifdef CONFIG_HTC_SLEEP_MODE_GPIO_DUMP
+#include "gpio_dump.h"
+#endif
+
 #define MSM_A2M_INT(n) (MSM_CSR_BASE + 0x400 + (n) * 4)
 
 static inline void notify_other_proc_comm(void)
@@ -75,6 +79,24 @@ int msm_proc_comm(unsigned cmd, unsigned *data1, unsigned *data2)
 
 	spin_lock_irqsave(&proc_comm_lock, flags);
 
+#ifdef CONFIG_HTC_SLEEP_MODE_GPIO_DUMP
+	if (cmd == PCOM_RPC_GPIO_TLMM_CONFIG_EX) {
+		unsigned int value, gpio, owner;
+
+		gpio = (*data1 >> 4) & 0x3FF;
+		owner = readl(htc_smem_gpio_cfg(gpio, 0));
+		owner = owner & (0x1 << GPIO_CFG_OWNER);
+
+		value = (0 << GPIO_CFG_INVALID) | owner  |
+			(((*data1 >> 17) & 0xF) << GPIO_CFG_DRVSTR) |
+			(((*data1 >> 15) & 0x3) << GPIO_CFG_PULL) |
+			(((*data1 >> 14) & 0x1) << GPIO_CFG_DIR) |
+			(0x01 << GPIO_CFG_RMT) | (*data1 & 0xF);
+
+		writel(value, htc_smem_gpio_cfg(gpio, 0));
+	}
+#endif
+
 	for (;;) {
 		if (proc_comm_wait_for(base + MDM_STATUS, PCOM_READY))
 			continue;
@@ -119,5 +141,5 @@ void __init proc_comm_boot_wait(void)
 	void __iomem *base = MSM_SHARED_RAM_BASE;
  
 	proc_comm_wait_for(base + MDM_STATUS, PCOM_READY);
- 
+
 }
