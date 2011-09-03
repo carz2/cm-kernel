@@ -249,7 +249,6 @@ static void audpre_dsp_event(void *data, unsigned id, size_t len,
 			    void (*getevent)(void *ptr, size_t len))
 {
 	uint16_t msg[2];
-	pr_info("%s %d\n", __func__, id);
 	getevent(msg, sizeof(msg));
 
 	switch (id) {
@@ -258,9 +257,6 @@ static void audpre_dsp_event(void *data, unsigned id, size_t len,
 		break;
 	case AUDPREPROC_MSG_ERROR_MSG_ID:
 		pr_info("audpre: err_index %d\n", msg[0]);
-		break;
-	case ADSP_MESSAGE_ID:
-		pr_info("audpre: module enabled\n");
 		break;
 	default:
 		pr_err("audpre: unknown event %d\n", id);
@@ -341,9 +337,6 @@ static void audrec_dsp_event(void *data, unsigned id, size_t len,
 		/*REC_DBG("type %x, count %d",
 		msg[0], (msg[1] | (msg[2] << 16)));*/
 		audio_in_get_dsp_frames(audio);
-		break;
-	case ADSP_MESSAGE_ID:
-		pr_info("audrec: module enabled\n");
 		break;
 	default:
 		pr_err("audrec: unknown event %d\n", id);

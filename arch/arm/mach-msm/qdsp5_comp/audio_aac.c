@@ -1,6 +1,6 @@
-/* arch/arm/mach-msm/qdsp5_comp/audio_mp3.c
+/* arch/arm/mach-msm/qdsp5_comp/audio_aac.c
  *
- * mp3 audio output device
+ * aac audio output device
  *
  * Copyright (C) 2008 Google, Inc.
  * Copyright (C) 2008 HTC Corporation
@@ -41,12 +41,13 @@
 
 #include <linux/wakelock.h>
 
+#include <mach/htc_pwrsink.h>
+
 /* for queue ids - should be relative to module number*/
 #include "adsp.h"
 #include "audplay.h"
-#include <mach/htc_pwrsink.h>
 
-#define AUDDEC_DEC_MP3 2
+#define AUDDEC_DEC_AACLC 5
 
 /* Decoder status received from AUDPPTASK */
 enum audpp_dec_status_type{
@@ -54,7 +55,7 @@ enum audpp_dec_status_type{
 	AUDPP_DEC_STATUS_INIT,
 	AUDPP_DEC_STATUS_CFG,
 	AUDPP_DEC_STATUS_PLAY
-} ;
+};
 
 static void audio_prevent_sleep(struct audio *audio)
 {
@@ -71,18 +72,18 @@ static int auddec_flush_decoder(struct audio *audio);
 static int auddec_pause_decoder(struct audio *audio);
 static int auddec_resume_decoder(struct audio *audio);
 static void audpp_cmd_cfg_adec_params(struct audio *audio);
-static void audplay_dsp_event(void *data, unsigned id, size_t len,
+static void audplay_aac_dsp_event(void *data, unsigned id, size_t len,
 			    void (*getevent)(void *ptr, size_t len));
-static void audplay_modem_event(void *data, uint32_t image);
+static void audplay_aac_modem_event(void *data, uint32_t image);
 static void audio_dsp_event(void *private, unsigned id, uint16_t *msg);
 static void audio_modem_event(void *private, unsigned image_swap);
-static void audio_mp3_audmgr_cb(void);
+static void audio_aac_audmgr_cb(void);
 
 static uint32_t discard_bytes;
 
-struct msm_adsp_ops audplay_adsp_ops = {
-	.event = audplay_dsp_event,
-	.modem_event = audplay_modem_event,
+struct msm_adsp_ops audplay_aac_adsp_ops = {
+	.event = audplay_aac_dsp_event,
+	.modem_event = audplay_aac_modem_event,
 };
 
 /* must be called with audio->lock held */
@@ -91,7 +92,7 @@ static int audio_enable(struct audio *audio)
 	struct audmgr_config cfg;
 	int rc;
 
-	pr_info("audio_mp3_enable()\n");
+	pr_info("audio_aac_enable()\n");
 
 	if (audio->enabled)
 		return 0;
@@ -102,38 +103,41 @@ static int audio_enable(struct audio *audio)
 	cfg.tx_rate = RPC_AUD_DEF_SAMPLE_RATE_NONE;
 	cfg.rx_rate = RPC_AUD_DEF_SAMPLE_RATE_48000;
 	cfg.def_method = RPC_AUD_DEF_METHOD_PLAYBACK;
-	cfg.codec = RPC_AUD_DEF_CODEC_MP3;
+	cfg.codec = RPC_AUD_DEF_CODEC_AAC;
 	cfg.snd_method = RPC_SND_METHOD_MIDI;
 
 	audio_prevent_sleep(audio);
-	audio->audmgr.cb = audio_mp3_audmgr_cb;
+	audio->audmgr.cb = audio_aac_audmgr_cb;
 	rc = audmgr_enable(&audio->audmgr, &cfg);
 	if (rc < 0) {
-		pr_err("audio_mp3: audmgr_enable() failed\n");
+		pr_err("audio_aac: audmgr_enable() failed\n");
 		audio_allow_sleep(audio);
 		return rc;
 	}
 
-	if (msm_adsp_get("AUDPLAY0TASK", &audio->audplay,
-				&audplay_adsp_ops, audio)) {
-		pr_err("audio_mp3: failed to get audplay0 dsp module\n");
+	rc = msm_adsp_get("AUDPLAY0TASK", &audio->audplay,
+			&audplay_aac_adsp_ops, audio);
+	if (rc) {
+		pr_err("audio_aac:"
+				" failed to get audplay0 dsp module\n");
 		goto err_get_adsp;
 	}
 
 	if (msm_adsp_enable(audio->audplay)) {
-		pr_err("audio_mp3: msm_adsp_enable(audplay) failed\n");
+		pr_err("audio_aac:"
+				" msm_adsp_enable(audplay) failed\n");
 		goto err_enable_adsp;
 	}
 
 	if (audpp_enable(audio->dec_id, audio_dsp_event,
-				audio_modem_event, audio)) {
-		pr_err("audio_mp3: audpp_enable() failed\n");
+			audio_modem_event, audio)) {
+		pr_err("audio_aac: audpp_enable() failed\n");
 		goto err_enable_audpp;
 	}
 
 	atomic_set(&audio->image_swap, 0);
 	audio->enabled = 1;
-	htc_pwrsink_audio_set(PWRSINK_AUDIO_MP3, 100);
+	htc_pwrsink_audio_set(PWRSINK_AUDIO_AAC, 100);
 	return 0;
 
 err_enable_audpp:
@@ -150,7 +154,7 @@ err_get_adsp:
 static int audio_disable(struct audio *audio)
 {
 	if (audio->enabled) {
-		pr_info("audio_mp3_disable()\n");
+		pr_info("audio_aac_disable()\n");
 		audio->enabled = 0;
 		auddec_dsp_config(audio, 0);
 		wake_up(&audio->wait);
@@ -165,14 +169,14 @@ static int audio_disable(struct audio *audio)
 		audio->out_needed = 0;
 		audio->paused = 0;
 		audio_allow_sleep(audio);
-		htc_pwrsink_audio_set(PWRSINK_AUDIO_MP3, 0);
+		htc_pwrsink_audio_set(PWRSINK_AUDIO_AAC, 0);
 	}
 	return 0;
 }
 
 /* ------------------- dsp --------------------- */
 
-static void audplay_dsp_event(void *data, unsigned id, size_t len,
+static void audplay_aac_dsp_event(void *data, unsigned id, size_t len,
 			    void (*getevent)(void *ptr, size_t len))
 {
 	struct audio *audio = data;
@@ -181,7 +185,8 @@ static void audplay_dsp_event(void *data, unsigned id, size_t len,
 
 	switch (id) {
 	case AUDPLAY_MSG_STREAM_INFO:
-		/* only for AAC playback */
+		pr_info("aac:channel_mode = %d, sample_rate = %d\n", \
+			msg[1], msg[2]);
 		break;
 	case AUDPLAY_MSG_DEC_NEEDS_DATA:
 		if (!atomic_read(&audio->curr_img)) {
@@ -189,25 +194,20 @@ static void audplay_dsp_event(void *data, unsigned id, size_t len,
 		} else {
 			audio->dsp_free_len = msg[3] - 2;
 			audio->dsp_write_ptr = (uint16_t *)
-						adsp_rtos_phy_to_vir(msg[4],
-								MSM_AD5_BASE);
+				adsp_rtos_phy_to_vir(msg[4], MSM_AD5_BASE);
 			audio->dsp_start_ptr = (uint16_t *)
-						adsp_rtos_phy_to_vir(msg[5],
-								MSM_AD5_BASE);
+				adsp_rtos_phy_to_vir(msg[5], MSM_AD5_BASE);
 			audio->dsp_buf_size = msg[6];
 			audplay_send_lp_data(audio, 1);
 		}
 		break;
-	case ADSP_MESSAGE_ID:
-		pr_info("audplay: module enabled\n");
-		break;
 	default:
-		pr_err("mp3: unexpected message from decoder\n");
+		pr_err("aac:unexpected message from decoder \n");
 		break;
 	}
 }
 
-static void audplay_modem_event(void *data, uint32_t image)
+static void audplay_aac_modem_event(void *data, uint32_t image)
 {
 	struct audio *audio = data;
 	struct msm_adsp_module *module = audio->audplay;
@@ -225,44 +225,50 @@ static void audio_dsp_event(void *private, unsigned id, uint16_t *msg)
 
 	switch (id) {
 	case AUDPP_MSG_STATUS_MSG: {
+		unsigned id = msg[0];
 		unsigned status = msg[1];
 
+		if (id != audio->dec_id) {
+			pr_err("aac:bogus id\n");
+			break;
+		}
 		switch (status) {
 		case AUDPP_DEC_STATUS_SLEEP:
-			pr_info("mp3:decoder status: sleep \n");
+			pr_info("aac:decoder status: sleep \n");
 			break;
 		case AUDPP_DEC_STATUS_INIT: {
-			pr_info("mp3:decoder status: init \n");
+			pr_info("aac:decoder status: init \n");
 			audpp_cmd_cfg_adec_params(audio);
+			audplay_cmd_set_aac_dual_mono_mode(audio);
 			break;
 		}
 		case AUDPP_DEC_STATUS_CFG:
-			pr_info("mp3:decoder status: cfg \n");
+			pr_info("aac:decoder status: cfg \n");
 			break;
 		case AUDPP_DEC_STATUS_PLAY:
-			pr_info("mp3:decoder status: play \n");
+			pr_info("aac:decoder status: play \n");
 			break;
 		default:
-			pr_err("mp3:unknown decoder status \n");
+			pr_err("aac:unknown decoder status \n");
 			break;
 		}
 		break;
 	}
 	case AUDPP_MSG_CFG_MSG:
 		if (msg[0] == AUDPP_MSG_ENA_ENA) {
-			pr_info("audio_mp3_dsp_event: CFG_MSG ENABLE\n");
+			pr_info("audio_aac_dsp_event: CFG_MSG ENABLE\n");
 			auddec_dsp_config(audio, 1);
 			audio->out_needed = 0;
 			audio->running = 1;
-			audpp_set_volume_and_pan(
-					audio->dec_id, audio->volume, 0);
+			audpp_set_volume_and_pan(audio->dec_id,
+					audio->volume, 0);
 			audpp_avsync(audio->dec_id, 22050);
 		} else if (msg[0] == AUDPP_MSG_ENA_DIS) {
-			pr_info("audio_mp3_dsp_event: CFG_MSG DISABLE\n");
+			pr_info("audio_aac_dsp_event: CFG_MSG DISABLE\n");
 			audpp_avsync(audio->dec_id, 0);
 			audio->running = 0;
 		} else {
-			pr_err("audio_mp3_dsp_event: CFG_MSG %d?\n", msg[0]);
+			pr_err("audio_aac_dsp_event: CFG_MSG %d?\n", msg[0]);
 		}
 		break;
 	case AUDPP_MSG_AVSYNC_MSG: {
@@ -284,7 +290,7 @@ static void audio_dsp_event(void *private, unsigned id, uint16_t *msg)
 		}
 		break;
 	default:
-		pr_err("audio_mp3_dsp_event: UNKNOWN (%d)\n", id);
+		pr_err("audio_aac_dsp_event: UNKNOWN (%d)\n", id);
 	}
 
 }
@@ -305,7 +311,7 @@ static int auddec_dsp_config(struct audio *audio, int enable)
 	if (enable)
 		cmd.dec0_cfg = AUDPP_CMD_UPDATDE_CFG_DEC |
 			       AUDPP_CMD_ENA_DEC_V |
-			       AUDDEC_DEC_MP3;
+			       AUDDEC_DEC_AACLC;
 	else
 		cmd.dec0_cfg = AUDPP_CMD_UPDATDE_CFG_DEC |
 			       AUDPP_CMD_DIS_DEC_V;
@@ -348,14 +354,27 @@ static int auddec_resume_decoder(struct audio *audio)
 
 static void audpp_cmd_cfg_adec_params(struct audio *audio)
 {
-	audpp_cmd_cfg_adec_params_mp3 cmd;
+	audpp_cmd_cfg_adec_params_aac cmd;
 
 	memset(&cmd, 0, sizeof(cmd));
-	cmd.common.cmd_id = AUDPP_CMD_CFG_ADEC_PARAMS;
-	cmd.common.length = AUDPP_CMD_CFG_ADEC_PARAMS_MP3_LEN;
+	cmd.common.cmd_id =
+			AUDPP_CMD_CFG_ADEC_PARAMS;
+	cmd.common.length =
+			AUDPP_CMD_CFG_ADEC_PARAMS_AAC_LEN;
 	cmd.common.dec_id = audio->dec_id;
-	cmd.common.input_sampling_frequency = audio->out_sample_rate;
-
+	cmd.common.input_sampling_frequency =
+			audio->out_sample_rate;
+	cmd.format = audio->format;
+	cmd.audio_object = audio->audio_object;
+	cmd.ep_config = audio->ep_config;
+	cmd.aac_section_data_resilience_flag =
+			audio->aac_section_data_resilience_flag;
+	cmd.aac_scalefactor_data_resilience_flag =
+			audio->aac_scalefactor_data_resilience_flag;
+	cmd.aac_spectral_data_resilience_flag =
+			audio->aac_spectral_data_resilience_flag;
+	cmd.sbr_on_flag = audio->sbr_on_flag;
+	cmd.sbr_ps_on_flag = audio->sbr_ps_on_flag;
 	audpp_send_queue2(&cmd, sizeof(cmd));
 }
 /* ------------------- device --------------------- */
@@ -401,8 +420,8 @@ static long audio_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		audio->volume = arg;
 		if (audio->running) {
 			audpp_set_volume_and_pan(audio->dec_id, arg, 0);
-			htc_pwrsink_audio_volume_set(PWRSINK_AUDIO_MP3,
-						audio->volume);
+			htc_pwrsink_audio_volume_set(PWRSINK_AUDIO_AAC,
+					audio->volume);
 		}
 		spin_unlock_irqrestore(&audio->dsp_lock, flags);
 		return 0;
@@ -472,17 +491,44 @@ static long audio_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		config.buffer_size = BUFSZ;
 		config.buffer_count = 2;
 		config.sample_rate = audio->out_sample_rate;
-		if (audio->out_channel_mode == AUDPP_CMD_PCM_INTF_MONO_V)
+		if (audio->out_channel_mode ==
+				AUDPP_CMD_PCM_INTF_MONO_V) {
 			config.channel_count = 1;
-		else
+		} else {
 			config.channel_count = 2;
+		}
 		config.unused[0] = 0;
 		config.unused[1] = 0;
 		config.unused[2] = 0;
-		if (copy_to_user((void *) arg, &config, sizeof(config)))
+		if (copy_to_user((void *) arg, &config,
+				sizeof(config))) {
 			rc = -EFAULT;
-		else
+		} else {
 			rc = 0;
+		}
+		break;
+	}
+	case AUDIO_SET_AAC_CONFIG: {
+		struct msm_audio_aac_config aac_config;
+		if (copy_from_user(&aac_config, (void *) arg,
+				sizeof(aac_config))) {
+			rc = -EFAULT;
+			break;
+		}
+		audio->format = aac_config.format;
+		audio->audio_object = aac_config.audio_object;
+		audio->ep_config = aac_config.ep_config;
+		audio->aac_section_data_resilience_flag =
+				aac_config.aac_section_data_resilience_flag;
+		audio->aac_scalefactor_data_resilience_flag =
+				aac_config.aac_scalefactor_data_resilience_flag;
+		audio->aac_spectral_data_resilience_flag =
+				aac_config.aac_spectral_data_resilience_flag;
+		audio->sbr_on_flag = aac_config.sbr_on_flag;
+		audio->sbr_ps_on_flag = aac_config.sbr_ps_on_flag;
+		audio->dual_mono_mode = aac_config.dual_mono_mode;
+		audio->channel_configuration = aac_config.channel_configuration;
+		rc = 0;
 		break;
 	}
 	case AUDIO_WAIT_ADSP_DONE: {
@@ -611,16 +657,15 @@ static int audio_release(struct inode *inode, struct file *file)
 	return 0;
 }
 
-struct audio the_mp3_audio;
-
-static void audio_mp3_audmgr_cb(void)
+struct audio the_aac_audio;
+static void audio_aac_audmgr_cb(void)
 {
-	struct audio *audio = &the_mp3_audio;
+	struct audio *audio = &the_aac_audio;
 	struct audmgr *audmgr = &audio->audmgr;
 
 	if (audmgr->state == STATE_DISABLING && audio->enabled) {
 		if (audmgr_disable_event_rsp(audmgr))
-			pr_err("audio_mp3_audmgr_cb:"
+			pr_err("audio_aac_audmgr_cb:"
 					" audmgr_disable_event_rsp() failed\n");
 	} else if (audmgr->state == STATE_ENABLED) {
 		if (atomic_read(&audio->image_swap) == 1) {
@@ -628,15 +673,15 @@ static void audio_mp3_audmgr_cb(void)
 			atomic_set(&audio->image_swap, 0);
 			if (audpp_enable(audio->dec_id, audio_dsp_event,
 					 audio_modem_event, audio))
-				pr_err("audio_mp3_audmgr_cb:"
+				pr_err("audio_aac_audmgr_cb:"
 						" audpp_enable() failed\n");
 		}
 	}
 }
 
-static void audio_mp3_work_func(struct work_struct *work)
+static void audio_aac_work_func(struct work_struct *work)
 {
-	struct audio *audio = &the_mp3_audio;
+	struct audio *audio = &the_aac_audio;
 	struct msm_adsp_module *module = audio->audplay;
 	int rc;
 	if (module->state == ADSP_STATE_DISABLED && audio->enabled) {
@@ -645,32 +690,31 @@ static void audio_mp3_work_func(struct work_struct *work)
 		discard_bytes = audio->sent_bytes -
 				(audio->consumed_bytes +
 						audio->total_consumed_bytes);
-		pr_info("audio_mp3_work_func: %d bytes discarded.\n",
+		pr_info("audio_aac_work_func: %d bytes discarded.\n",
 				discard_bytes);
 		auddec_dsp_config(audio, 0);
-		rc = wait_event_interruptible(
-				audio->audpp_wait,
-				atomic_read(&audio->audpp_notify));
+		rc = wait_event_interruptible(audio->audpp_wait,
+					atomic_read(&audio->audpp_notify));
 		if (rc < 0) {
-			pr_err("audio_mp3_work_func: wait_event failed\n");
+			pr_err("audio_aac_work_func: wait_event failed\n");
 			return;
 		}
 		audpp_disable(audio->dec_id, audio);
 		rc = msm_adsp_disable_event_rsp(module);
 		if (rc < 0)
-			pr_err("audio_mp3_work_func:"
+			pr_err("audio_aac_work_func:"
 					" disable_event_rsp() failed\n");
 	}
 }
 
 static int audio_open(struct inode *inode, struct file *file)
 {
-	struct audio *audio = &the_mp3_audio;
+	struct audio *audio = &the_aac_audio;
 	int rc, n;
 
 	mutex_lock(&audio->lock);
 	if (audio->opened) {
-		pr_err("audio_mp3: busy\n");
+		pr_err("audio_aac: busy\n");
 		rc = -EBUSY;
 		goto done;
 	}
@@ -683,6 +727,18 @@ static int audio_open(struct inode *inode, struct file *file)
 	audio->out_sample_rate = 44100;
 	audio->out_channel_mode = AUDPP_CMD_PCM_INTF_STEREO_V;
 	audio->dec_id = 0;
+
+	/* set default aac parameters */
+	audio->format = AUDPP_CMD_AAC_FORMAT_ADTS;
+	audio->audio_object = AUDPP_CMD_AAC_AUDIO_OBJECT_LC;
+	audio->ep_config = 0;
+	audio->aac_section_data_resilience_flag = 0;
+	audio->aac_scalefactor_data_resilience_flag = 0;
+	audio->aac_spectral_data_resilience_flag = 0;
+	audio->sbr_on_flag = AUDPP_CMD_AAC_SBR_ON_FLAG_ON;
+	audio->sbr_ps_on_flag = AUDPP_CMD_AAC_SBR_PS_ON_FLAG_ON;
+	audio->dual_mono_mode = 3;
+	audio->channel_configuration = 2;
 
 	audio->dsp_free_len = 0;
 	audio->dsp_write_ptr = 0;
@@ -707,7 +763,7 @@ done:
 	return rc;
 }
 
-static struct file_operations audio_mp3_fops = {
+static struct file_operations audio_aac_fops = {
 	.owner		= THIS_MODULE,
 	.open		= audio_open,
 	.release	= audio_release,
@@ -716,30 +772,30 @@ static struct file_operations audio_mp3_fops = {
 	.unlocked_ioctl	= audio_ioctl,
 };
 
-struct miscdevice audio_mp3_misc = {
+struct miscdevice audio_aac_misc = {
 	.minor	= MISC_DYNAMIC_MINOR,
-	.name	= "msm_mp3",
-	.fops	= &audio_mp3_fops,
+	.name	= "msm_aac",
+	.fops	= &audio_aac_fops,
 };
 
 static int __init audio_init(void)
 {
-	the_mp3_audio.data = dma_alloc_coherent(NULL, DMASZ,
-					 &the_mp3_audio.phys, GFP_KERNEL);
-	if (!the_mp3_audio.data) {
-		pr_err("audio_mp3: could not allocate DMA buffers\n");
+	the_aac_audio.data = dma_alloc_coherent(NULL, DMASZ,
+					 &the_aac_audio.phys, GFP_KERNEL);
+	if (!the_aac_audio.data) {
+		pr_err("audio_aac: could not allocate DMA buffers\n");
 		return -ENOMEM;
 	}
 
-	mutex_init(&the_mp3_audio.lock);
-	mutex_init(&the_mp3_audio.write_lock);
-	spin_lock_init(&the_mp3_audio.dsp_lock);
-	init_waitqueue_head(&the_mp3_audio.wait);
-	init_waitqueue_head(&the_mp3_audio.audpp_wait);
-	init_waitqueue_head(&the_mp3_audio.adsp_wait);
-	INIT_WORK(&the_mp3_audio.work, audio_mp3_work_func);
-	wake_lock_init(&the_mp3_audio.wakelock, WAKE_LOCK_SUSPEND, "audio_mp3");
-	return misc_register(&audio_mp3_misc);
+	mutex_init(&the_aac_audio.lock);
+	mutex_init(&the_aac_audio.write_lock);
+	spin_lock_init(&the_aac_audio.dsp_lock);
+	init_waitqueue_head(&the_aac_audio.wait);
+	init_waitqueue_head(&the_aac_audio.audpp_wait);
+	init_waitqueue_head(&the_aac_audio.adsp_wait);
+	INIT_WORK(&the_aac_audio.work, audio_aac_work_func);
+	wake_lock_init(&the_aac_audio.wakelock, WAKE_LOCK_SUSPEND, "audio_aac");
+	return misc_register(&audio_aac_misc);
 }
 
 device_initcall(audio_init);
