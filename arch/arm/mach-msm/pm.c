@@ -343,7 +343,7 @@ static int msm_sleep(int sleep_mode, uint32_t sleep_delay, int from_idle)
 	}
 
 	if (sleep_mode <= MSM_PM_SLEEP_MODE_RAMP_DOWN_AND_WAIT_FOR_INTERRUPT) {
-		pm_saved_acpu_clk_rate = acpuclk_power_collapse();
+		pm_saved_acpu_clk_rate = acpuclk_power_collapse(from_idle);
 		if (msm_pm_debug_mask & MSM_PM_DEBUG_CLOCK)
 			printk(KERN_INFO "msm_sleep(): %ld enter power collapse"
 			       "\n", pm_saved_acpu_clk_rate);
@@ -588,7 +588,7 @@ void msm_pm_flush_console(void)
 	release_console_sem();
 }
 
-static void msm_pm_restart(char str)
+static void msm_pm_restart(char str,const char *cmd)
 {
 	msm_pm_flush_console();
 

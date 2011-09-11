@@ -88,7 +88,7 @@ struct sapphire_axis_info {
 };
 static bool nav_just_on;
 static int nav_on_jiffies;
-#if	defined(CONFIG_MSM_AMSS_SUPPORT_256MB_EBI1)
+#if     defined(CONFIG_MSM_AMSS_SUPPORT_256MB_EBI1)
 static int smi_sz = 32;
 #else
 static int smi_sz = 64;
@@ -760,18 +760,18 @@ static struct platform_device sapphire_rfkill = {
 };
 
 static struct msm_pmem_setting pmem_setting_32 = {
-	.pmem_start = SMI32_MSM_PMEM_MDP_BASE,
-	.pmem_size = SMI32_MSM_PMEM_MDP_SIZE,
-	.pmem_adsp_start = SMI32_MSM_PMEM_ADSP_BASE,
-	.pmem_adsp_size = SMI32_MSM_PMEM_ADSP_SIZE,
-	.pmem_gpu0_start = MSM_PMEM_GPU0_BASE,
-	.pmem_gpu0_size = MSM_PMEM_GPU0_SIZE,
-	.pmem_gpu1_start = SMI32_MSM_PMEM_GPU1_BASE,
-	.pmem_gpu1_size = SMI32_MSM_PMEM_GPU1_SIZE,
-	.pmem_camera_start = SMI32_MSM_PMEM_CAMERA_BASE,
-	.pmem_camera_size = SMI32_MSM_PMEM_CAMERA_SIZE,
-	.ram_console_start = SMI32_MSM_RAM_CONSOLE_BASE,
-	.ram_console_size = SMI32_MSM_RAM_CONSOLE_SIZE,
+        .pmem_start = SMI32_MSM_PMEM_MDP_BASE,
+        .pmem_size = SMI32_MSM_PMEM_MDP_SIZE,
+        .pmem_adsp_start = SMI32_MSM_PMEM_ADSP_BASE,
+        .pmem_adsp_size = SMI32_MSM_PMEM_ADSP_SIZE,
+        .pmem_gpu0_start = MSM_PMEM_GPU0_BASE,
+        .pmem_gpu0_size = MSM_PMEM_GPU0_SIZE,
+        .pmem_gpu1_start = SMI32_MSM_PMEM_GPU1_BASE,
+        .pmem_gpu1_size = SMI32_MSM_PMEM_GPU1_SIZE,
+        .pmem_camera_start = SMI32_MSM_PMEM_CAMERA_BASE,
+        .pmem_camera_size = SMI32_MSM_PMEM_CAMERA_SIZE,
+        .ram_console_start = SMI32_MSM_RAM_CONSOLE_BASE,
+        .ram_console_size = SMI32_MSM_RAM_CONSOLE_SIZE,
 };
 
 static struct msm_pmem_setting pmem_setting_32_mono = {
@@ -805,18 +805,18 @@ static struct msm_pmem_setting pmem_setting_32_dual = {
 };
 
 static struct msm_pmem_setting pmem_setting_64 = {
-	.pmem_start = SMI64_MSM_PMEM_MDP_BASE,
-	.pmem_size = SMI64_MSM_PMEM_MDP_SIZE,
-	.pmem_adsp_start = SMI64_MSM_PMEM_ADSP_BASE,
-	.pmem_adsp_size = SMI64_MSM_PMEM_ADSP_SIZE,
-	.pmem_gpu0_start = MSM_PMEM_GPU0_BASE,
-	.pmem_gpu0_size = MSM_PMEM_GPU0_SIZE,
-	.pmem_gpu1_start = SMI64_MSM_PMEM_GPU1_BASE,
-	.pmem_gpu1_size = SMI64_MSM_PMEM_GPU1_SIZE,
-	.pmem_camera_start = SMI64_MSM_PMEM_CAMERA_BASE,
-	.pmem_camera_size = SMI64_MSM_PMEM_CAMERA_SIZE,
-	.ram_console_start = SMI64_MSM_RAM_CONSOLE_BASE,
-	.ram_console_size = SMI64_MSM_RAM_CONSOLE_SIZE,
+        .pmem_start = SMI64_MSM_PMEM_MDP_BASE,
+        .pmem_size = SMI64_MSM_PMEM_MDP_SIZE,
+        .pmem_adsp_start = SMI64_MSM_PMEM_ADSP_BASE,
+        .pmem_adsp_size = SMI64_MSM_PMEM_ADSP_SIZE,
+        .pmem_gpu0_start = MSM_PMEM_GPU0_BASE,
+        .pmem_gpu0_size = MSM_PMEM_GPU0_SIZE,
+        .pmem_gpu1_start = SMI64_MSM_PMEM_GPU1_BASE,
+        .pmem_gpu1_size = SMI64_MSM_PMEM_GPU1_SIZE,
+        .pmem_camera_start = SMI64_MSM_PMEM_CAMERA_BASE,
+        .pmem_camera_size = SMI64_MSM_PMEM_CAMERA_SIZE,
+        .ram_console_start = SMI64_MSM_RAM_CONSOLE_BASE,
+        .ram_console_size = SMI64_MSM_RAM_CONSOLE_SIZE,
 };
 
 #ifdef CONFIG_WIFI_CONTROL_FUNC
@@ -1158,11 +1158,7 @@ static struct msm_acpu_clock_platform_data sapphire_clock_data = {
 	.max_speed_delta_khz = 256000,
 	.vdd_switch_time_us = 62,
 	.power_collapse_khz = 19200000,
-#if defined(CONFIG_TURBO_MODE) 
-        .wait_for_irq_khz = 176000000, 
-#else 
-        .wait_for_irq_khz = 128000000, 
-#endif 
+	.wait_for_irq_khz = 128000000,
 };
 
 #ifdef CONFIG_SERIAL_MSM_HS
@@ -1415,11 +1411,11 @@ static void __init sapphire_fixup(struct machine_desc *desc, struct tag *tags,
 
 		/*Give a default value when not get smi size*/
 		smi_sz = 64;
-		mi->bank[0].size = SMI64_MSM_LINUX_SIZE;	//(101*1024*1024);
+                mi->bank[0].size = SMI64_MSM_LINUX_SIZE;        //(101*1024*1024);
 		printk(KERN_ERR "use default  :  smisize=%d\n", smi_sz);
 	}
 #endif
-	printk("sapphire_fixup:bank size=0x%x\n", mi->bank[0].size);
+        printk("sapphire_fixup:bank size=0x%x\n", mi->bank[0].size);
 }
 
 static void __init sapphire_map_io(void)
@@ -1436,7 +1432,7 @@ MACHINE_START(SAPPHIRE, "sapphire")
 	.io_pg_offst    = ((MSM_DEBUG_UART_BASE) >> 18) & 0xfffc,
 #endif
 #if defined(CONFIG_MSM_AMSS_SUPPORT_256MB_EBI1)
-	.boot_params    = 0x19200100,
+        .boot_params    = 0x19200100,
 #else
 	.boot_params    = 0x10000100,
 #endif
