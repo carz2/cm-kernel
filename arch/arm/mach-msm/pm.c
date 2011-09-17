@@ -29,6 +29,9 @@
 #include <mach/msm_iomap.h>
 #include <mach/system.h>
 #include <asm/io.h>
+#ifdef CONFIG_VFP
+#include <asm/vfp.h>
+#endif
 
 #include "smd_private.h"
 #include "acpuclock.h"
@@ -67,10 +70,17 @@ module_param_named(idle_sleep_min_time, msm_pm_idle_sleep_min_time, int, S_IRUGO
 static int msm_pm_idle_spin_time = CONFIG_MSM7X00A_IDLE_SPIN_TIME;
 module_param_named(idle_spin_time, msm_pm_idle_spin_time, int, S_IRUGO | S_IWUSR | S_IWGRP);
 
+#if defined(CONFIG_ARCH_MSM7X30)
+#define A11S_CLK_SLEEP_EN (MSM_GCC_BASE + 0x020)
+#define A11S_PWRDOWN      (MSM_ACC_BASE + 0x01c)
+#define A11S_SECOP        (MSM_TCSR_BASE + 0x038)
+#else
 #define A11S_CLK_SLEEP_EN (MSM_CSR_BASE + 0x11c)
 #define A11S_PWRDOWN (MSM_CSR_BASE + 0x440)
 #define A11S_STANDBY_CTL (MSM_CSR_BASE + 0x108)
 #define A11RAMBACKBIAS (MSM_CSR_BASE + 0x508)
+#endif
+
 
 #if defined(CONFIG_ARCH_QSD8X50)
 #define DEM_MASTER_BITS_PER_CPU             6
@@ -123,6 +133,7 @@ void msm_timer_exit_idle(int low_power);
 int msm_irq_idle_sleep_allowed(void);
 int msm_irq_pending(void);
 int clks_print_running(void);
+extern int board_mfg_mode(void);
 
 static int axi_rate;
 static int sleep_axi_rate;
@@ -200,10 +211,64 @@ msm_pm_wait_state(uint32_t wait_all_set, uint32_t wait_all_clear,
 	return -ETIMEDOUT;
 }
 
+/*
+ * For speeding up boot time:
+ * During booting up, disable entering arch_idle() by disable_hlt()
+ * Enable it after booting up BOOT_LOCK_TIMEOUT sec.
+ */
+#define BOOT_LOCK_TIMEOUT_NORMAL      (60 * HZ)
+#define BOOT_LOCK_TIMEOUT_SHORT      (10 * HZ)
+static void do_expire_boot_lock(struct work_struct *work)
+{
+  enable_hlt();
+  pr_info("Release 'boot-time' no_halt_lock\n");
+}
+static DECLARE_DELAYED_WORK(work_expire_boot_lock, do_expire_boot_lock);
+
+static void
+msm_pm_enter_prep_hw(void)
+{
+#if defined(CONFIG_ARCH_MSM7X30)
+  writel(1, A11S_PWRDOWN);
+  writel(4, A11S_SECOP);
+#elif defined(CONFIG_ARCH_MSM7X27)
+  writel(0x1f, A11S_CLK_SLEEP_EN);
+  writel(1, A11S_PWRDOWN);
+#elif defined(CONFIG_ARCH_QSD8X50)
+  writel(0x1f, A11S_CLK_SLEEP_EN);
+  writel(1, A11S_PWRDOWN);
+  writel(0, A11S_STANDBY_CTL);
+#else /* 7X00/7X25 */
+  writel(0x1f, A11S_CLK_SLEEP_EN);
+  writel(1, A11S_PWRDOWN);
+  writel(0, A11S_STANDBY_CTL);
+  writel(0, A11RAMBACKBIAS);
+#endif
+}
+
+static void
+msm_pm_exit_restore_hw(void)
+{
+#if defined(CONFIG_ARCH_MSM7X30)
+	writel(0, A11S_SECOP);
+	writel(0, A11S_PWRDOWN);
+#else
+	writel(0x00, A11S_CLK_SLEEP_EN);
+	writel(0, A11S_PWRDOWN);
+#endif
+}
+
 #ifdef CONFIG_MSM_FIQ_SUPPORT
 void msm_fiq_exit_sleep(void);
 #else
 static inline void msm_fiq_exit_sleep(void) { }
+#endif
+
+#ifdef CONFIG_HTC_POWER_COLLAPSE_MAGIC
+/* Set magic number in SMEM for power collapse state */
+#define HTC_POWER_COLLAPSE_ADD  (MSM_SHARED_RAM_BASE + 0x000F8000 + 0x000007F8)
+#define HTC_POWER_COLLAPSE_MAGIC_NUM  (HTC_POWER_COLLAPSE_ADD - 0x04)
+unsigned int magic_num;
 #endif
 
 static int msm_sleep(int sleep_mode, uint32_t sleep_delay, int from_idle)
@@ -232,7 +297,31 @@ static int msm_sleep(int sleep_mode, uint32_t sleep_delay, int from_idle)
 	if (msm_pm_debug_mask & MSM_PM_DEBUG_SUSPEND)
 		printk(KERN_INFO "msm_sleep(): mode %d delay %u idle %d\n",
 		       sleep_mode, sleep_delay, from_idle);
-#if defined(CONFIG_ARCH_QSD8X50)
+
+#ifndef CONFIG_ARCH_MSM_SCORPION
+	switch (sleep_mode) {
+	case MSM_PM_SLEEP_MODE_POWER_COLLAPSE:
+		enter_state = SMSM_PWRC;
+		enter_wait_set = SMSM_RSA;
+		exit_state = SMSM_WFPI;
+		exit_wait_clear = SMSM_RSA;
+		break;
+	case MSM_PM_SLEEP_MODE_POWER_COLLAPSE_SUSPEND:
+		enter_state = SMSM_PWRC_SUSPEND;
+		enter_wait_set = SMSM_RSA;
+		exit_state = SMSM_WFPI;
+		exit_wait_clear = SMSM_RSA;
+		break;
+	case MSM_PM_SLEEP_MODE_APPS_SLEEP:
+		enter_state = SMSM_SLEEP;
+		exit_state = SMSM_SLEEPEXIT;
+		exit_wait_any_set = SMSM_SLEEPEXIT;
+		break;
+	default:
+		enter_state = 0;
+		exit_state = 0;
+	}
+#else
 	switch (sleep_mode) {
 	case MSM_PM_SLEEP_MODE_POWER_COLLAPSE:
 		enter_state = DEM_SLAVE_SMSM_PWRC;
@@ -253,29 +342,6 @@ static int msm_sleep(int sleep_mode, uint32_t sleep_delay, int from_idle)
 		enter_wait_set = DEM_MASTER_SMSM_SLEEP;
 		exit_state = DEM_SLAVE_SMSM_SLEEP_EXIT;
 		exit_wait_any_set = DEM_MASTER_SMSM_SLEEP_EXIT;
-		break;
-	default:
-		enter_state = 0;
-		exit_state = 0;
-	}
-#else
-	switch (sleep_mode) {
-	case MSM_PM_SLEEP_MODE_POWER_COLLAPSE:
-		enter_state = SMSM_PWRC;
-		enter_wait_set = SMSM_RSA;
-		exit_state = SMSM_WFPI;
-		exit_wait_clear = SMSM_RSA;
-		break;
-	case MSM_PM_SLEEP_MODE_POWER_COLLAPSE_SUSPEND:
-		enter_state = SMSM_PWRC_SUSPEND;
-		enter_wait_set = SMSM_RSA;
-		exit_state = SMSM_WFPI;
-		exit_wait_clear = SMSM_RSA;
-		break;
-	case MSM_PM_SLEEP_MODE_APPS_SLEEP:
-		enter_state = SMSM_SLEEP;
-		exit_state = SMSM_SLEEPEXIT;
-		exit_wait_any_set = SMSM_SLEEPEXIT;
 		break;
 	default:
 		enter_state = 0;
@@ -323,17 +389,7 @@ static int msm_sleep(int sleep_mode, uint32_t sleep_delay, int from_idle)
 		goto enter_failed;
 
 	if (enter_state) {
-#ifdef CONFIG_ARCH_MSM_SCORPION
-		writel(0x1b, A11S_CLK_SLEEP_EN);
-#else
-		writel(0x1f, A11S_CLK_SLEEP_EN);
-#endif
-		writel(1, A11S_PWRDOWN);
-
-		writel(0, A11S_STANDBY_CTL);
-#ifndef CONFIG_ARCH_MSM_SCORPION
-		writel(0, A11RAMBACKBIAS);
-#endif
+		msm_pm_enter_prep_hw();
 
 		if (msm_pm_debug_mask & MSM_PM_DEBUG_STATE)
 			printk(KERN_INFO "msm_sleep(): enter "
@@ -354,6 +410,10 @@ static int msm_sleep(int sleep_mode, uint32_t sleep_delay, int from_idle)
 		if (axi_rate)
 			clk_set_rate(axi_clk, sleep_axi_rate);
 	}
+#ifdef CONFIG_HTC_POWER_COLLAPSE_MAGIC
+  magic_num = 0xAAAA1111;
+  writel(magic_num, HTC_POWER_COLLAPSE_MAGIC_NUM);
+#endif
 	if (sleep_mode < MSM_PM_SLEEP_MODE_APPS_SLEEP) {
 		if (msm_pm_debug_mask & MSM_PM_DEBUG_SMSM_STATE)
 			smsm_print_sleep_info();
@@ -365,10 +425,23 @@ static int msm_sleep(int sleep_mode, uint32_t sleep_delay, int from_idle)
 			printk(KERN_INFO "msm_sleep(): vector %x %x -> "
 			       "%x %x\n", saved_vector[0], saved_vector[1],
 			       msm_pm_reset_vector[0], msm_pm_reset_vector[1]);
+#ifdef CONFIG_VFP
+    if (from_idle)
+      vfp_flush_context();
+#endif
+
+    if (!from_idle) printk(KERN_INFO "[R] suspend end\n");
+    /* reset idle sleep mode when suspend. */
+    if (!from_idle) msm_pm_idle_sleep_mode = CONFIG_MSM7X00A_IDLE_SLEEP_MODE;
 		collapsed = msm_pm_collapse();
+    if (!from_idle) printk(KERN_INFO "[R] resume start\n");
 		msm_pm_reset_vector[0] = saved_vector[0];
 		msm_pm_reset_vector[1] = saved_vector[1];
 		if (collapsed) {
+#ifdef CONFIG_VFP
+      if (from_idle)
+        vfp_reinit();
+#endif
 			cpu_init();
 			__asm__("cpsie   a");
 			msm_fiq_exit_sleep();
@@ -384,12 +457,20 @@ static int msm_sleep(int sleep_mode, uint32_t sleep_delay, int from_idle)
 		msm_arch_idle();
 		rv = 0;
 	}
-
+#ifdef CONFIG_HTC_POWER_COLLAPSE_MAGIC
+  magic_num = 0xBBBB9999;
+  writel(magic_num, HTC_POWER_COLLAPSE_MAGIC_NUM);
+#endif
 	if (sleep_mode <= MSM_PM_SLEEP_MODE_RAMP_DOWN_AND_WAIT_FOR_INTERRUPT) {
 		if (msm_pm_debug_mask & MSM_PM_DEBUG_CLOCK)
 			printk(KERN_INFO "msm_sleep(): exit power collapse %ld"
 			       "\n", pm_saved_acpu_clk_rate);
+#if defined(CONFIG_ARCH_QSD8X50)
 		if (acpuclk_set_rate(pm_saved_acpu_clk_rate, 1) < 0)
+#else
+    if (acpuclk_set_rate(pm_saved_acpu_clk_rate,
+      from_idle ? SETRATE_PC_IDLE : SETRATE_PC) < 0)
+#endif
 			printk(KERN_ERR "msm_sleep(): clk_set_rate %ld "
 			       "failed\n", pm_saved_acpu_clk_rate);
 
@@ -406,8 +487,8 @@ ramp_down_failed:
 	msm_irq_exit_sleep1();
 enter_failed:
 	if (enter_state) {
-		writel(0x00, A11S_CLK_SLEEP_EN);
-		writel(0, A11S_PWRDOWN);
+		msm_pm_exit_restore_hw();
+
 		smsm_change_state(PM_SMSM_WRITE_STATE, enter_state, exit_state);
 		msm_pm_wait_state(0, exit_wait_clear, exit_wait_any_set, 0);
 		if (msm_pm_debug_mask & MSM_PM_DEBUG_STATE)
@@ -504,7 +585,12 @@ void arch_idle(void)
 		if (msm_pm_debug_mask & MSM_PM_DEBUG_CLOCK)
 			printk(KERN_DEBUG "msm_sleep: clk swfi -> %ld\n",
 				saved_rate);
-		if (acpuclk_set_rate(saved_rate, 1) < 0)
+#if defined(CONFIG_ARCH_QSD8X50)
+    if (saved_rate && acpuclk_set_rate(saved_rate, 1) < 0)
+#else
+    if (saved_rate
+        && acpuclk_set_rate(saved_rate, SETRATE_SWFI) < 0)
+#endif
 			printk(KERN_ERR "msm_sleep(): clk_set_rate %ld "
 			       "failed\n", saved_rate);
 #ifdef CONFIG_MSM_IDLE_STATS
@@ -736,6 +822,29 @@ static void __init msm_pm_axi_init(void)
 #endif
 }
 
+static void __init boot_lock_nohalt(void)
+{
+  int nohalt_timeout;
+
+  /* normal/factory2/recovery */
+  switch (board_mfg_mode()) {
+  case 0: /* normal */
+  case 1: /* factory2 */
+  case 2: /* recovery */
+    nohalt_timeout = BOOT_LOCK_TIMEOUT_NORMAL;
+    break;
+  case 3: /* charge */
+  case 4: /* power_test */
+  case 5: /* offmode_charge */
+  default:
+    nohalt_timeout = BOOT_LOCK_TIMEOUT_SHORT;
+    break;
+  }
+  disable_hlt();
+  schedule_delayed_work(&work_expire_boot_lock, nohalt_timeout);
+  pr_info("Acquire 'boot-time' no_halt_lock %ds\n", nohalt_timeout / HZ);
+}
+
 static int __init msm_pm_init(void)
 {
 	pm_power_off = msm_pm_power_off;
@@ -745,7 +854,7 @@ static int __init msm_pm_init(void)
 
 	register_reboot_notifier(&msm_reboot_notifier);
 
-	msm_pm_reset_vector = ioremap(0, PAGE_SIZE);
+	msm_pm_reset_vector = ioremap(RESET_VECTOR, PAGE_SIZE);
 	if (msm_pm_reset_vector == NULL) {
 		printk(KERN_ERR "msm_pm_init: failed to map reset vector\n");
 		return -ENODEV;
@@ -757,6 +866,8 @@ static int __init msm_pm_init(void)
 	create_proc_read_entry("msm_pm_stats", S_IRUGO,
 				NULL, msm_pm_read_proc, NULL);
 #endif
+
+  boot_lock_nohalt();
 	return 0;
 }
 
