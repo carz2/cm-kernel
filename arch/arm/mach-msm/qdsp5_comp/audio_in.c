@@ -248,7 +248,7 @@ static int audio_in_disable(struct audio_in *audio)
 static void audpre_dsp_event(void *data, unsigned id, size_t len,
 			    void (*getevent)(void *ptr, size_t len))
 {
-	uint16_t msg[2];
+	uint16_t msg[6]; /*change to cm msg id */
 	getevent(msg, sizeof(msg));
 
 	switch (id) {
@@ -305,7 +305,7 @@ static void audrec_dsp_event(void *data, unsigned id, size_t len,
 			    void (*getevent)(void *ptr, size_t len))
 {
 	struct audio_in *audio = data;
-	uint16_t msg[3];
+	uint16_t msg[6]; /*change to cm msg id */
 	getevent(msg, sizeof(msg));
 
 	switch (id) {
