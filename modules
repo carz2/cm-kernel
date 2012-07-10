@@ -2,37 +2,28 @@
 
 export KERNEL_DIR=$PWD
 
-cd $KERNEL_DIR
-if [ ! -d output ]; then
-	mkdir output;
-fi
+cp -f $KERNEL_DIR/arch/arm/boot/zImage ~/android2.3.7/system/device/htc/dream-sapphire/prebuilt/kernel/kernel > /dev/null
 
-if [ ! -d output/modules ]; then
-	mkdir output/modules;
-fi
+find $KERNEL_DIR -name wlan.ko -exec cp -f '{}' ~/android2.3.7/system/device/htc/dream-sapphire/prebuilt/modules/ \; > /dev/null
 
-cp -f $KERNEL_DIR/arch/arm/boot/zImage $KERNEL_DIR/output/ > /dev/null
+find $KERNEL_DIR -name cifs.ko -exec cp -f '{}' ~/android2.3.7/system/device/htc/dream-sapphire/prebuilt/modules/ \; > /dev/null
 
-find $KERNEL_DIR -name wlan.ko -exec cp -f '{}' $KERNEL_DIR/output/modules/ \; > /dev/null
+find $KERNEL_DIR -name fuse.ko -exec cp -f '{}' ~/android2.3.7/system/device/htc/dream-sapphire/prebuilt/modules/ \; > /dev/null
 
-find $KERNEL_DIR -name ramzswap.ko -exec cp -f '{}' $KERNEL_DIR/output/modules/ \; > /dev/null
+find $KERNEL_DIR -name lockd.ko -exec cp -f '{}' ~/android2.3.7/system/device/htc/dream-sapphire/prebuilt/modules/ \; > /dev/null
 
-find $KERNEL_DIR -name cifs.ko -exec cp -f '{}' $KERNEL_DIR/output/modules/ \; > /dev/null
+find $KERNEL_DIR -name nfs.ko -exec cp -f '{}' ~/android2.3.7/system/device/htc/dream-sapphire/prebuilt/modules/ \; > /dev/null
 
-find $KERNEL_DIR -name fuse.ko -exec cp -f '{}' $KERNEL_DIR/output/modules/ \; > /dev/null
+find $KERNEL_DIR -name nfs_acl.ko -exec cp -f '{}' ~/android2.3.7/system/device/htc/dream-sapphire/prebuilt/modules/ \; > /dev/null
 
-find $KERNEL_DIR -name lockd.ko -exec cp -f '{}' $KERNEL_DIR/output/modules/ \; > /dev/null
+find $KERNEL_DIR -name mip6.ko -exec cp -f '{}' ~/android2.3.7/system/device/htc/dream-sapphire/prebuilt/modules/ \; > /dev/null
 
-find $KERNEL_DIR -name nfs.ko -exec cp -f '{}' $KERNEL_DIR/output/modules/ \; > /dev/null
+find $KERNEL_DIR -name auth_rpcgss.ko -exec cp -f '{}' ~/android2.3.7/system/device/htc/dream-sapphire/prebuilt/modules/ \; > /dev/null
 
-find $KERNEL_DIR -name nfs_acl.ko -exec cp -f '{}' $KERNEL_DIR/output/modules/ \; > /dev/null
+find $KERNEL_DIR -name sunrpc.ko -exec cp -f '{}' ~/android2.3.7/system/device/htc/dream-sapphire/prebuilt/modules/ \; > /dev/null
 
-find $KERNEL_DIR -name mip6.ko -exec cp -f '{}' $KERNEL_DIR/output/modules/ \; > /dev/null
+find $KERNEL_DIR -name rpcsec_gss_krb5.ko -exec cp -f '{}' ~/android2.3.7/system/device/htc/dream-sapphire/prebuilt/modules/ \; > /dev/null
 
-find $KERNEL_DIR -name auth_rpcgss.ko -exec cp -f '{}' $KERNEL_DIR/output/modules/ \; > /dev/null
-
-find $KERNEL_DIR -name rpcsec_gss_krb5.ko -exec cp -f '{}' $KERNEL_DIR/output/modules/ \; > /dev/null
-
-find $KERNEL_DIR -name sunrpc.ko -exec cp -f '{}' $KERNEL_DIR/output/modules/ \; > /dev/null
+find $KERNEL_DIR -name ramzswap.ko -exec cp -f '{}' ~/android2.3.7/system/device/htc/dream-sapphire/prebuilt/modules/ \; > /dev/null
 
 exit #
